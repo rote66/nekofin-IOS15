@@ -1,7 +1,8 @@
+import { composeSemantics } from '@/components/ui/composeCompatModifiers.android';
 import { useTranslation } from '@/lib/i18n';
 import { useAppTheme } from '@/lib/theme';
 import { CircularProgressIndicator, Text, TextButton } from '@expo/ui/jetpack-compose';
-import { semantics, size, testID } from '@expo/ui/jetpack-compose/modifiers';
+import { size, testID } from '@expo/ui/jetpack-compose/modifiers';
 import { Button, ProgressView } from '@expo/ui/swift-ui';
 import {
   accessibilityLabel,
@@ -32,11 +33,7 @@ export function DanmakuSearchButton({
         enabled={!disabled}
         onClick={onPress}
         colors={{ contentColor: theme.colors.tint }}
-        modifiers={[
-          size(64, 44),
-          semantics({ contentDescription: label }),
-          testID('player-danmaku-search-submit'),
-        ]}
+        modifiers={[size(64, 44), composeSemantics(label), testID('player-danmaku-search-submit')]}
       >
         {loading ? (
           <CircularProgressIndicator color={theme.colors.tint} modifiers={[size(20, 20)]} />

@@ -4,6 +4,8 @@ import {
   NativeSettingsPicker,
   NativeSettingsSection,
   NativeSettingsSwitch,
+  NativeSettingsText,
+  NativeSettingsTextField,
   type NativeSettingsOption,
 } from '@/components/ui/NativeSettings';
 import { SettingsSubtitle, SettingsSymbol, SettingsTitle } from '@/components/ui/SettingsVisual';
@@ -23,17 +25,8 @@ import {
 } from '@/services/danmakuEpisodeLoader';
 import { findDandanEpisode } from '@/services/danmakuMatching';
 import { danmakuSourcesKey } from '@/services/danmakuSources';
-import { Text as NativeText, TextInput as NativeTextInput, Row, useNativeState } from '@expo/ui';
-import { fillMaxWidth, padding, weight } from '@expo/ui/jetpack-compose/modifiers';
 import { Picker as SwiftPicker, Text as SwiftText } from '@expo/ui/swift-ui';
-import {
-  disabled as disabledModifier,
-  frame,
-  listRowSeparator,
-  pickerStyle,
-  tag,
-  tint,
-} from '@expo/ui/swift-ui/modifiers';
+import { disabled as disabledModifier, pickerStyle, tag, tint } from '@expo/ui/swift-ui/modifiers';
 import { useCallback, useEffect, useImperativeHandle, useRef, useState, type Ref } from 'react';
 import { AccessibilityInfo, Platform } from 'react-native';
 
@@ -53,12 +46,9 @@ export type DanmakuSearchPanelRef = { cancelPending: () => void; goBack: () => b
 function SearchTitle({ children }: { children: string }) {
   const theme = useAppTheme();
   return (
-    <NativeText
-      numberOfLines={3}
-      textStyle={{ color: theme.colors.text, fontSize: 16, lineHeight: 21 }}
-    >
+    <NativeSettingsText color={theme.colors.text} fontSize={16} lineHeight={21} maxLines={3}>
       {children}
-    </NativeText>
+    </NativeSettingsText>
   );
 }
 
@@ -122,7 +112,6 @@ export function DanmakuSearchPanel({
   const apiKey = danmakuSourcesKey(sources);
   const [episodeLoader] = useState(createDanmakuEpisodeLoader);
   const initialKeyword = currentItem?.seriesName ?? currentItem?.name ?? '';
-  const keywordState = useNativeState(initialKeyword);
   const [keyword, setKeyword] = useState(initialKeyword);
   const [apiIds, setApiIds] = useState(() =>
     sources.filter((source) => source.enabled).map((source) => source.id),
@@ -283,8 +272,6 @@ export function DanmakuSearchPanel({
       />
     </NativeSettingsSection>
   ) : null;
-  // Compose measures unweighted children first, reserving room for the submit button.
-  const inputModifiers = Platform.OS === 'ios' ? [frame({ maxWidth: Infinity })] : [weight(1)];
   const searchDisabled = !keyword.trim() || loading || !apiIds.length;
   const seasonOptions = danmakuSeasonOptions(animes);
   const playingEpisode = currentItem?.type === 'Movie' ? undefined : currentItem?.indexNumber;
@@ -484,38 +471,31 @@ export function DanmakuSearchPanel({
   return (
     <NativeSettingsForm hosted surface="sheet" testID="player-danmaku-search">
       <NativeSettingsSection title={tr('danmaku.searchSeries')}>
-        <Row
-          alignment="center"
-          spacing={12}
-          modifiers={
-            Platform.OS === 'ios'
-              ? [listRowSeparator('hidden', 'all')]
-              : [fillMaxWidth(), padding(16, 0, 16, 0)]
+        <NativeSettingsTextField
+          label={tr('danmaku.searchSeries')}
+          value={keyword}
+          onChangeText={(value) => {
+            cancelPending();
+            setKeyword(value);
+            setAnimes([]);
+            setSeason('all');
+          }}
+          onSubmitEditing={() => void handleSearch(keyword)}
+          placeholder={tr('danmaku.enterSeriesOrMovieTitle')}
+          autoCapitalize="none"
+          autoCorrect={false}
+          returnKeyType="search"
+          testID="player-danmaku-search-input"
+          minHeight={40}
+          hideSeparator={Platform.OS === 'ios'}
+          trailing={
+            <DanmakuSearchButton
+              disabled={searchDisabled}
+              loading={loading}
+              onPress={() => void handleSearch()}
+            />
           }
-        >
-          <NativeTextInput
-            value={keywordState}
-            onChangeText={(value) => {
-              cancelPending();
-              setKeyword(value);
-              setAnimes([]);
-              setSeason('all');
-            }}
-            onSubmitEditing={(submitted) => void handleSearch(submitted)}
-            placeholder={tr('danmaku.enterSeriesOrMovieTitle')}
-            autoCapitalize="none"
-            autoCorrect={false}
-            returnKeyType="search"
-            modifiers={inputModifiers}
-            style={{ height: 40 }}
-            testID="player-danmaku-search-input"
-          />
-          <DanmakuSearchButton
-            disabled={searchDisabled}
-            loading={loading}
-            onPress={() => void handleSearch()}
-          />
-        </Row>
+        />
       </NativeSettingsSection>
       <NativeSettingsSection footer={playingContext}>
         <NativeSettingsItem

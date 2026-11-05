@@ -1,24 +1,21 @@
+import { isBelowUpstreamIOSMinimum } from '@/lib/compat/ios15';
 import { useTranslation } from '@/lib/i18n';
 import { useAppTheme } from '@/lib/theme';
-import {
-  BottomSheet,
-  Button,
-  Host,
-  NavigationStack,
-  Toolbar,
-  ToolbarItem,
-} from '@expo/ui/swift-ui';
+import { BottomSheet, Button, Host, HStack, Spacer, Text, VStack } from '@expo/ui/swift-ui';
 import {
   accessibilityLabel,
+  buttonStyle,
+  createModifier,
+  createModifierWithEventListener,
+  foregroundStyle,
+  frame,
   labelStyle,
-  navigationBarTitleDisplayMode,
-  navigationTitle,
-  presentationBackground,
+  padding,
   presentationDetents,
   presentationDragIndicator,
-  scrollEdgeEffectStyle,
   tint,
 } from '@expo/ui/swift-ui/modifiers';
+import { Platform, StyleSheet, View } from 'react-native';
 
 import { usePlayerPanelPresentation, type PlayerPanelHostProps } from './playerPanelPresentation';
 
@@ -27,59 +24,98 @@ export function PlayerPanelHost(props: PlayerPanelHostProps) {
   const { visible, onDismiss, testID = 'player-panel-host' } = props;
   const theme = useAppTheme();
   const panel = usePlayerPanelPresentation(props);
+  const legacyHeader = isBelowUpstreamIOSMinimum(Platform.OS, Platform.Version);
+  const nativeNavigation = createModifierWithEventListener(
+    'nekofinPlayerNavigation',
+    (event) => {
+      if (event.action === 'back') panel.onBack?.();
+      if (event.action === 'close') onDismiss();
+    },
+    {
+      title: panel.title,
+      showsBack: !!panel.onBack,
+      backLabel: tr('common.back'),
+      backAccessibilityLabel: tr('common.goBack'),
+      closeAccessibilityLabel: tr('common.closeTitle', { title: panel.title }),
+      backgroundColor: theme.colors.backgroundGrouped,
+      tintColor: theme.colors.tint,
+    },
+  );
 
   return (
-    <Host style={{ position: 'absolute' }} pointerEvents="none" colorScheme={theme.colorScheme}>
-      <BottomSheet
-        isPresented={visible}
-        onIsPresentedChange={(presented) => {
-          if (!presented) onDismiss();
-        }}
-        testID={testID}
-      >
-        <NavigationStack
-          modifiers={[
-            presentationDetents(['large']),
-            presentationDragIndicator('visible'),
-            presentationBackground(theme.colors.backgroundGrouped),
-            tint(theme.colors.tint),
-          ]}
+    <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+      <Host style={StyleSheet.absoluteFill} colorScheme={theme.colorScheme}>
+        <BottomSheet
+          isPresented={visible}
+          onIsPresentedChange={(presented) => {
+            if (!presented) onDismiss();
+          }}
+          testID={testID}
         >
-          <Toolbar
+          <VStack
             modifiers={[
-              navigationTitle(panel.title),
-              navigationBarTitleDisplayMode('inline'),
-              scrollEdgeEffectStyle('soft', 'top'),
+              ...(legacyHeader
+                ? [
+                    presentationDetents(['large']),
+                    presentationDragIndicator('visible'),
+                    createModifier('nekofinPresentationBackground', {
+                      color: theme.colors.backgroundGrouped,
+                    }),
+                    createModifier('nekofinScrollEdgeEffectStyle', {}),
+                    tint(theme.colors.tint),
+                  ]
+                : [nativeNavigation]),
+              frame({ maxWidth: Infinity, maxHeight: Infinity }),
             ]}
           >
-            {panel.children}
-            <Toolbar.Content>
-              {panel.onBack ? (
-                <ToolbarItem placement="topBarLeading">
+            {legacyHeader ? (
+              <HStack
+                spacing={12}
+                modifiers={[
+                  padding({ horizontal: 16, vertical: 10 }),
+                  frame({ maxWidth: Infinity }),
+                ]}
+              >
+                {panel.onBack ? (
                   <Button
                     label={tr('common.back')}
                     systemImage="chevron.backward"
                     onPress={panel.onBack}
-                    modifiers={[accessibilityLabel(tr('common.goBack'))]}
+                    modifiers={[buttonStyle('borderless'), accessibilityLabel(tr('common.goBack'))]}
                   />
-                </ToolbarItem>
-              ) : null}
-              <ToolbarItem placement="topBarTrailing">
+                ) : (
+                  <Spacer />
+                )}
+                <Spacer />
+                <Text
+                  modifiers={[
+                    createModifier('nekofinFontTextStyle', {
+                      textStyle: 'headline',
+                      weight: 'semibold',
+                    }),
+                    foregroundStyle(theme.colors.text),
+                  ]}
+                >
+                  {panel.title}
+                </Text>
+                <Spacer />
                 <Button
-                  role="close"
+                  role="cancel"
                   label={tr('common.close')}
                   systemImage="xmark"
                   onPress={onDismiss}
                   modifiers={[
                     labelStyle('iconOnly'),
+                    buttonStyle('borderless'),
                     accessibilityLabel(tr('common.closeTitle', { title: panel.title })),
                   ]}
                 />
-              </ToolbarItem>
-            </Toolbar.Content>
-          </Toolbar>
-        </NavigationStack>
-      </BottomSheet>
-    </Host>
+              </HStack>
+            ) : null}
+            {panel.children}
+          </VStack>
+        </BottomSheet>
+      </Host>
+    </View>
   );
 }

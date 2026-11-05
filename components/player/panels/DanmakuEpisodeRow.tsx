@@ -1,4 +1,4 @@
-import { NativeSettingsItem } from '@/components/ui/NativeSettings';
+import { NativeSettingsItem, NativeSettingsText } from '@/components/ui/NativeSettings';
 import { SettingsSubtitle } from '@/components/ui/SettingsVisual';
 import { useTranslation } from '@/lib/i18n';
 import { useAppTheme } from '@/lib/theme';
@@ -7,8 +7,6 @@ import {
   createDanmakuEpisodeLoader,
   danmakuEpisodeCacheKey,
 } from '@/services/danmakuEpisodeLoader';
-import { Text as NativeText } from '@expo/ui';
-import { onGloballyPositioned } from '@expo/ui/jetpack-compose/modifiers';
 import { onAppear, onDisappear } from '@expo/ui/swift-ui/modifiers';
 import { useQuery } from '@tanstack/react-query';
 import { useCallback, useState } from 'react';
@@ -39,7 +37,8 @@ export function DanmakuEpisodeRow({
   const disappear = useCallback(() => setVisible(false), []);
   const positionChanged = useCallback(
     ({ y, height }: { y: number; height: number }) => {
-      setVisible(y < windowHeight && y + height > 0);
+      const nextVisible = y < windowHeight && y + height > 0;
+      setVisible((current) => (current === nextVisible ? current : nextVisible));
     },
     [windowHeight],
   );
@@ -66,12 +65,9 @@ export function DanmakuEpisodeRow({
   return (
     <NativeSettingsItem
       title={
-        <NativeText
-          numberOfLines={3}
-          textStyle={{ color: theme.colors.text, fontSize: 16, lineHeight: 21 }}
-        >
+        <NativeSettingsText color={theme.colors.text} fontSize={16} lineHeight={21} maxLines={3}>
           {title ?? entry.episode.episodeTitle}
-        </NativeText>
+        </NativeSettingsText>
       }
       subtitle={
         <SettingsSubtitle
@@ -81,13 +77,8 @@ export function DanmakuEpisodeRow({
         />
       }
       onPress={disabled ? undefined : onPress}
-      modifiers={
-        Platform.OS === 'ios'
-          ? [onAppear(appear), onDisappear(disappear)]
-          : Platform.OS === 'android'
-            ? [onGloballyPositioned(positionChanged)]
-            : undefined
-      }
+      modifiers={Platform.OS === 'ios' ? [onAppear(appear), onDisappear(disappear)] : undefined}
+      onPositionChange={Platform.OS === 'android' ? positionChanged : undefined}
       testID={'player-danmaku-episode-' + entry.source.id + '-' + entry.episode.episodeId}
     />
   );

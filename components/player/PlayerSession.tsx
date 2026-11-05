@@ -17,8 +17,16 @@ export function PlayerSession({
   params,
   lifecycle,
   children,
-}: PropsWithChildren<{ params: PlayerParams; lifecycle: PlayerLifecycleState }>) {
+  decodeParams = true,
+}: PropsWithChildren<{
+  params: PlayerParams;
+  lifecycle: PlayerLifecycleState;
+  decodeParams?: boolean;
+}>) {
   const { itemId, selection } = useMemo(() => {
+    if (!decodeParams) {
+      return { itemId: params.itemId, selection: parsePlaybackSelection(params) };
+    }
     // screenLayout receives raw navigation params; retain Expo Router's URI decoding.
     const decoded = Object.fromEntries(
       Object.entries(params ?? {}).map(([key, value]) => {
@@ -31,7 +39,7 @@ export function PlayerSession({
       }),
     ) as PlayerParams;
     return { itemId: decoded.itemId, selection: parsePlaybackSelection(decoded) };
-  }, [params]);
+  }, [decodeParams, params]);
 
   return (
     <VideoPlayer key={itemId} itemId={itemId} initialSelection={selection} lifecycle={lifecycle}>

@@ -1,5 +1,4 @@
-import { useTracedRouter } from '@/hooks/performance/useTracedRouter';
-import { useAppNavigation } from '@/hooks/useAppNavigation';
+import { PlayerBackControl } from '@/components/compat/ios15/PlayerBackControl';
 import dayjs from '@/lib/dayjs';
 import { useTranslation } from '@/lib/i18n';
 import { formatBitrate } from '@/lib/utils';
@@ -7,12 +6,11 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import * as Network from 'expo-network';
 import { useNetworkState } from 'expo-network';
 import { useEffect, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 import Animated, { useAnimatedStyle } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { usePlayer } from './PlayerContext';
-import { PlayerGlassSurface } from './PlayerGlassSurface';
 import { useOverlayInsets } from './useOverlayInsets';
 
 const networkIcons: Partial<Record<Network.NetworkStateType, keyof typeof Ionicons.glyphMap>> = {
@@ -35,8 +33,6 @@ export function TopControls() {
     playback: { currentItem, danmakuComments, hdrState, mediaStats, title },
     controls: { fadeAnim, showControls },
   } = usePlayer();
-  const router = useTracedRouter('player-top-controls');
-  const goToDestination = useAppNavigation();
   const { type: networkType } = useNetworkState();
   const [now, setNow] = useState('');
 
@@ -52,15 +48,6 @@ export function TopControls() {
     const interval = setInterval(update, 30_000);
     return () => clearInterval(interval);
   }, []);
-
-  const handleBackPress = () => {
-    if (router.canGoBack()) {
-      router.back();
-      return;
-    }
-
-    goToDestination('servers');
-  };
 
   const hdrLabel = hdrState?.isHdr ? (hdrState.hdrFormat === 'hlg' ? 'HLG' : 'HDR') : null;
   const networkIcon = networkType ? networkIcons[networkType] : undefined;
@@ -98,24 +85,11 @@ export function TopControls() {
       ]}
     >
       <View pointerEvents="box-none" style={[styles.content, { maxWidth: maxContentWidth }]}>
-        <PlayerGlassSurface
-          contentStyle={styles.backButtonContent}
+        <PlayerBackControl
+          accessibilityLabel={tr('common.back')}
           fadeProgress={fadeAnim}
-          radius={22}
-          style={styles.backButtonSurface}
-          surfaceStyle={styles.backButtonSurfaceInner}
           visible={showControls}
-        >
-          <Pressable
-            accessibilityLabel={tr('common.back')}
-            accessibilityRole="button"
-            hitSlop={6}
-            onPress={handleBackPress}
-            style={({ pressed }) => [styles.backButton, pressed && styles.pressed]}
-          >
-            <Ionicons name="chevron-back" size={24} color="#fff" />
-          </Pressable>
-        </PlayerGlassSurface>
+        />
 
         <Animated.View style={[styles.titleBlock, fadeAnimatedStyle]} pointerEvents="none">
           <Text style={styles.title} numberOfLines={1} ellipsizeMode="tail">
@@ -165,24 +139,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 14,
     width: '100%',
-  },
-  backButtonSurface: {
-    height: 44,
-    width: 44,
-  },
-  backButtonSurfaceInner: {
-    height: 44,
-    width: 44,
-  },
-  backButtonContent: {
-    height: 44,
-    width: 44,
-  },
-  backButton: {
-    alignItems: 'center',
-    height: 44,
-    justifyContent: 'center',
-    width: 44,
   },
   titleBlock: {
     flex: 1,

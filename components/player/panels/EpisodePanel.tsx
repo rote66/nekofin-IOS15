@@ -1,38 +1,33 @@
 import { ItemImage } from '@/components/ItemImage';
 import { getImagePreferenceOptions } from '@/components/media/cardHelpers';
-import { NativeSettingsItem } from '@/components/ui/NativeSettings';
+import { NativeSettingsItem, NativeSettingsText } from '@/components/ui/NativeSettings';
 import { SettingsSubtitle, SettingsSymbol, SettingsTitle } from '@/components/ui/SettingsVisual';
 import { useMediaAdapter } from '@/hooks/useMediaAdapter';
+import { isBelowUpstreamIOSMinimum } from '@/lib/compat/ios15';
 import { useTranslation } from '@/lib/i18n';
 import { useAppTheme } from '@/lib/theme';
 import { formatDurationFromTicks } from '@/lib/utils';
 import type { MediaItem } from '@/services/media/types';
-import { List as NativeList, Text as NativeText } from '@expo/ui';
+import { RNHostView as ComposeRNHostView, LazyColumn } from '@expo/ui/jetpack-compose';
+import { testID as composeTestID } from '@expo/ui/jetpack-compose/modifiers';
 import {
   ContentUnavailableView,
-  LazyVStack,
   List as SwiftList,
-  ScrollView as SwiftScrollView,
   Section as SwiftSection,
-  useNativeState,
 } from '@expo/ui/swift-ui';
 import {
-  accessibilityAddTraits,
-  accessibilityElement,
   accessibilityLabel,
   backgroundOverlay,
   clipShape,
+  createModifier,
   frame,
-  id as nativeID,
   onAppear,
   onDisappear,
   padding,
-  scrollPosition,
-  scrollTargetLayout,
 } from '@expo/ui/swift-ui/modifiers';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { ImageType } from '@jellyfin/sdk/lib/generated-client/models';
-import { memo, useCallback, useEffect, useMemo, useState } from 'react';
+import { memo, useCallback, useMemo, useState } from 'react';
 import { Platform, StyleSheet, View } from 'react-native';
 
 export type EpisodePanelProps = {
@@ -51,8 +46,11 @@ type EpisodeRowModel = {
 };
 
 const imageOptions = getImagePreferenceOptions(ImageType.Thumb);
-const supportsNativeScrollPosition =
+const supportsNativeScrollViewEpisodeStyle =
   Platform.OS === 'ios' && Number.parseInt(String(Platform.Version), 10) >= 17;
+const supportsContentUnavailableView = supportsNativeScrollViewEpisodeStyle;
+const supportsNativeEpisodeScroll =
+  Platform.OS === 'ios' && !isBelowUpstreamIOSMinimum(Platform.OS, Platform.Version);
 
 type EpisodeNativeRowProps = EpisodeRowModel & {
   current: boolean;
@@ -81,88 +79,93 @@ const EpisodeNativeRow = memo(function EpisodeNativeRow({
   const modifiers =
     Platform.OS === 'ios'
       ? [
-          nativeID(id),
           frame({ maxWidth: Infinity, minHeight: 76, alignment: 'leading' }),
           padding({ horizontal: 10, vertical: 8 }),
           backgroundOverlay({ color: current ? theme.colors.surfaceMuted : 'transparent' }),
           clipShape('roundedRectangle', 15),
-          accessibilityElement('combine'),
+          createModifier('nekofinAccessibilityCombine', {}),
           accessibilityLabel(rowLabel),
-          ...(current ? [accessibilityAddTraits(['isSelected'])] : []),
+          ...(current
+            ? [createModifier('nekofinAccessibilityTraits', { traits: ['isSelected'] })]
+            : []),
           onAppear(handleArtworkAppear),
           onDisappear(handleArtworkDisappear),
+          ...(supportsNativeEpisodeScroll ? [createModifier('nekofinEpisodeRowID', { id })] : []),
+          ...(supportsNativeScrollViewEpisodeStyle
+            ? [createModifier('nekofinEpisodeListRow', {})]
+            : []),
         ]
       : undefined;
   const supportingText =
     metadata || overview ? (
       <>
         {metadata ? (
-          <NativeText
-            numberOfLines={1}
-            textStyle={{
-              color: theme.colors.textSecondary,
-              fontSize: 12,
-              fontWeight: '500',
-              lineHeight: 15,
-            }}
+          <NativeSettingsText
+            color={theme.colors.textSecondary}
+            fontSize={12}
+            fontWeight="medium"
+            lineHeight={15}
+            maxLines={1}
           >
             {metadata}
-          </NativeText>
+          </NativeSettingsText>
         ) : null}
         {overview ? (
-          <NativeText
-            numberOfLines={1}
-            textStyle={{
-              color: theme.colors.textTertiary,
-              fontSize: 11,
-              fontWeight: '400',
-              lineHeight: 14,
-            }}
+          <NativeSettingsText
+            color={theme.colors.textTertiary}
+            fontSize={11}
+            lineHeight={14}
+            maxLines={1}
           >
             {overview}
-          </NativeText>
+          </NativeSettingsText>
         ) : null}
       </>
     ) : undefined;
+  const thumbnail = (
+    <View pointerEvents="none" style={styles.thumbnailFrame}>
+      {!imageUrl || artworkVisible ? (
+        <ItemImage
+          cachePolicy="disk"
+          contentFit="cover"
+          placeholderBlurhash={blurhash}
+          recyclingKey={id}
+          style={styles.thumbnail}
+          transition={120}
+          uri={imageUrl}
+        />
+      ) : (
+        <View style={styles.thumbnailPlaceholder}>
+          <Ionicons color={theme.colors.textTertiary} name="film-outline" size={28} />
+        </View>
+      )}
+      {current ? (
+        <View style={styles.playingBadge}>
+          <Ionicons color="#111318" name="play" size={12} />
+        </View>
+      ) : null}
+    </View>
+  );
 
   return (
     <NativeSettingsItem
       leading={
-        <View pointerEvents="none" style={styles.thumbnailFrame}>
-          {!imageUrl || artworkVisible ? (
-            <ItemImage
-              cachePolicy="disk"
-              contentFit="cover"
-              placeholderBlurhash={blurhash}
-              recyclingKey={id}
-              style={styles.thumbnail}
-              transition={120}
-              uri={imageUrl}
-            />
-          ) : (
-            <View style={styles.thumbnailPlaceholder}>
-              <Ionicons color={theme.colors.textTertiary} name="film-outline" size={28} />
-            </View>
-          )}
-          {current ? (
-            <View style={styles.playingBadge}>
-              <Ionicons color="#111318" name="play" size={12} />
-            </View>
-          ) : null}
-        </View>
+        Platform.OS === 'android' ? (
+          <ComposeRNHostView matchContents>{thumbnail}</ComposeRNHostView>
+        ) : (
+          thumbnail
+        )
       }
       title={
-        <NativeText
-          numberOfLines={2}
-          textStyle={{
-            color: theme.colors.text,
-            fontSize: 14,
-            fontWeight: '600',
-            lineHeight: 18,
-          }}
+        <NativeSettingsText
+          color={theme.colors.text}
+          fontSize={14}
+          fontWeight="semibold"
+          lineHeight={18}
+          maxLines={2}
         >
           {title}
-        </NativeText>
+        </NativeSettingsText>
       }
       subtitle={supportingText}
       trailing={current ? <SettingsSymbol name="speaker.wave.2.fill" tone="muted" /> : undefined}
@@ -176,7 +179,7 @@ const EpisodeNativeRow = memo(function EpisodeNativeRow({
 
 function EpisodeEmptyState() {
   const { t: tr } = useTranslation();
-  if (supportsNativeScrollPosition) {
+  if (supportsContentUnavailableView) {
     return (
       <ContentUnavailableView
         description={tr('media.seasonEpisodesUnavailable')}
@@ -189,7 +192,10 @@ function EpisodeEmptyState() {
 
   if (Platform.OS === 'ios') {
     return (
-      <SwiftList testID="player-episode-panel">
+      <SwiftList
+        modifiers={[createModifier('nekofinEpisodeListStyle', {})]}
+        testID="player-episode-panel"
+      >
         <SwiftSection title={tr('media.series')}>
           <NativeSettingsItem
             title={<SettingsTitle>{tr('media.noEpisodes')}</SettingsTitle>}
@@ -201,12 +207,12 @@ function EpisodeEmptyState() {
   }
 
   return (
-    <NativeList testID="player-episode-panel">
+    <LazyColumn modifiers={[composeTestID('player-episode-panel')]}>
       <NativeSettingsItem
         title={<SettingsTitle>{tr('media.noEpisodes')}</SettingsTitle>}
         subtitle={<SettingsSubtitle primary={tr('media.seasonEpisodesUnavailable')} />}
       />
-    </NativeList>
+    </LazyColumn>
   );
 }
 
@@ -238,16 +244,6 @@ export function EpisodePanel({ episodes, currentItemId, onSelectEpisode }: Episo
       }),
     [episodes, mediaAdapter],
   );
-  const initialTargetId = rows.some((row) => row.id === currentItemId) ? currentItemId : null;
-  const scrollTarget = useNativeState<string | null>(initialTargetId ?? null);
-  const handlePanelAppear = useCallback(() => {
-    if (initialTargetId) scrollTarget.set(initialTargetId);
-  }, [initialTargetId, scrollTarget]);
-
-  useEffect(() => {
-    if (Platform.OS === 'ios' && initialTargetId) scrollTarget.set(initialTargetId);
-  }, [initialTargetId, scrollTarget]);
-
   if (rows.length === 0) return <EpisodeEmptyState />;
 
   const rowNodes = rows.map((row) => (
@@ -264,33 +260,24 @@ export function EpisodePanel({ episodes, currentItemId, onSelectEpisode }: Episo
     />
   ));
 
-  if (supportsNativeScrollPosition) {
-    return (
-      <SwiftScrollView
-        modifiers={[
-          frame({ maxHeight: Infinity, maxWidth: Infinity }),
-          scrollPosition(scrollTarget, { anchor: 'center' }),
-          onAppear(handlePanelAppear),
-        ]}
-        showsIndicators={false}
-        testID="player-episode-panel"
-      >
-        <LazyVStack
-          alignment="leading"
-          modifiers={[
-            frame({ maxWidth: Infinity, alignment: 'leading' }),
-            padding({ top: 8, bottom: 16, horizontal: 10 }),
-            scrollTargetLayout(),
-          ]}
-          spacing={2}
-        >
-          {rowNodes}
-        </LazyVStack>
-      </SwiftScrollView>
-    );
-  }
-
   if (Platform.OS === 'ios') {
+    // Preserve the upstream chronological episode order and centered current
+    // item on iOS 16.4+. ScrollViewReader is available before the SDK 57-only
+    // scrollPosition/useNativeState bridge introduced in iOS 17.
+    if (supportsNativeEpisodeScroll) {
+      return (
+        <SwiftList
+          modifiers={[
+            createModifier('nekofinEpisodeListStyle', {}),
+            createModifier('nekofinEpisodeScrollTo', { targetID: currentItemId ?? '' }),
+          ]}
+          testID="player-episode-panel"
+        >
+          <SwiftSection>{rowNodes}</SwiftSection>
+        </SwiftList>
+      );
+    }
+
     const currentIndex = rows.findIndex((row) => row.id === currentItemId);
     const currentRowNode = currentIndex >= 0 ? rowNodes[currentIndex] : null;
     const remainingRowNodes = rowNodes.filter((_, index) => index !== currentIndex);
@@ -307,7 +294,7 @@ export function EpisodePanel({ episodes, currentItemId, onSelectEpisode }: Episo
     );
   }
 
-  return <NativeList testID="player-episode-panel">{rowNodes}</NativeList>;
+  return <LazyColumn modifiers={[composeTestID('player-episode-panel')]}>{rowNodes}</LazyColumn>;
 }
 
 const styles = StyleSheet.create({
