@@ -1,8 +1,11 @@
 import { OuterTitle } from '@/components/outer/OuterPrimitives';
 import {
+  NativeSettingsColumn,
   NativeSettingsForm,
   NativeSettingsItem,
+  NativeSettingsRNHostView,
   NativeSettingsSection,
+  NativeSettingsText,
 } from '@/components/ui/NativeSettings';
 import { settingsLayout } from '@/components/ui/settingsLayout';
 import {
@@ -28,12 +31,10 @@ import {
   clearSubtitleFontCache,
   SUBTITLE_FONT_CACHE_PATH,
 } from '@/services/media/subtitleFontCache';
-import { Column, Text as NativeText, RNHostView } from '@expo/ui';
-import { font } from '@expo/ui/swift-ui/modifiers';
+import { useIsFocused } from '@react-navigation/native';
 import { useQueryClient } from '@tanstack/react-query';
 import * as FileSystem from 'expo-file-system/legacy';
 import { Image } from 'expo-image';
-import { useIsFocused } from 'expo-router/react-navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Alert, Platform, View } from 'react-native';
 
@@ -285,31 +286,31 @@ export default function CacheSettingsScreen() {
       <OuterTitle>{tr('settings.storage')}</OuterTitle>
       <NativeSettingsForm testID="cache-settings-form">
         <NativeSettingsSection title={tr('cache.onDeviceStorage')}>
-          <Column
+          <NativeSettingsColumn
             spacing={14}
-            style={{ padding: Platform.OS === 'android' ? settingsLayout.contentInset : 8 }}
+            inset={Platform.OS === 'android' ? settingsLayout.contentInset : 8}
           >
-            <NativeText
-              textStyle={{ fontSize: 36, fontWeight: '600', color: theme.colors.text }}
-              modifiers={
-                Platform.OS === 'ios'
-                  ? [font({ textStyle: 'largeTitle', weight: 'semibold' })]
-                  : undefined
-              }
+            <NativeSettingsText
+              color={theme.colors.text}
+              fontSize={Platform.OS === 'ios' ? 34 : 36}
+              fontWeight="semibold"
+              textStyle={Platform.OS === 'ios' ? 'largeTitle' : undefined}
             >
               {measuring ? tr('cache.calculatingProgress') : formatStorageBytes(totalBytes)}
-            </NativeText>
-            <NativeText
-              textStyle={{ color: theme.colors.textSecondary, fontSize: 14 }}
-              modifiers={Platform.OS === 'ios' ? [font({ textStyle: 'footnote' })] : undefined}
+            </NativeSettingsText>
+            <NativeSettingsText
+              color={theme.colors.textSecondary}
+              fontSize={Platform.OS === 'ios' ? 13 : 14}
+              textStyle={Platform.OS === 'ios' ? 'footnote' : undefined}
             >
               {tr('cache.measuredStorageDescription')}
-            </NativeText>
-            <RNHostView matchContents={{ vertical: true }}>
+            </NativeSettingsText>
+            <NativeSettingsRNHostView matchContents={false} fillWidthHeight={6}>
               <View
                 accessible={false}
                 style={{
                   height: 6,
+                  width: '100%',
                   borderRadius: 3,
                   backgroundColor: theme.colors.surfaceMuted,
                   flexDirection: 'row',
@@ -329,17 +330,18 @@ export default function CacheSettingsScreen() {
                   }}
                 />
               </View>
-            </RNHostView>
-            <NativeText
-              textStyle={{ fontSize: 12, color: theme.colors.textSecondary }}
-              modifiers={Platform.OS === 'ios' ? [font({ textStyle: 'footnote' })] : undefined}
+            </NativeSettingsRNHostView>
+            <NativeSettingsText
+              color={theme.colors.textSecondary}
+              fontSize={12}
+              textStyle={Platform.OS === 'ios' ? 'footnote' : undefined}
             >
               {tr('cache.storageSummary', {
                 size: formatStorageBytes(totalBytes - fileCacheSizes.download),
                 size2: formatStorageBytes(fileCacheSizes.download),
               })}
-            </NativeText>
-          </Column>
+            </NativeSettingsText>
+          </NativeSettingsColumn>
         </NativeSettingsSection>
         <NativeSettingsSection title={tr('cache.temporaryData')}>
           <NativeSettingsItem

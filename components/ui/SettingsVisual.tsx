@@ -1,9 +1,9 @@
 import { AvatarImage } from '@/components/AvatarImage';
+import { NativeSettingsText } from '@/components/ui/NativeSettings';
 import { useAppTheme } from '@/lib/theme';
-import { Text as NativeText } from '@expo/ui';
 import { Icon as ComposeIcon } from '@expo/ui/jetpack-compose';
 import { Image as SwiftImage } from '@expo/ui/swift-ui';
-import { fixedSize, font, frame } from '@expo/ui/swift-ui/modifiers';
+import { frame } from '@expo/ui/swift-ui/modifiers';
 import { Platform, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 
 import { ANDROID_SETTINGS_ICONS, type SettingsSymbolName } from './nativeSettingsIcons';
@@ -41,18 +41,15 @@ export function SettingsSymbol({
   }
 
   return (
-    <NativeText
-      numberOfLines={1}
-      textStyle={{
-        color,
-        fontSize: 17,
-        fontWeight: '700',
-        lineHeight: 20,
-        textAlign: 'center',
-      }}
+    <NativeSettingsText
+      color={color}
+      fontSize={17}
+      fontWeight="bold"
+      lineHeight={20}
+      textAlign="center"
     >
       •
-    </NativeText>
+    </NativeSettingsText>
   );
 }
 
@@ -60,22 +57,16 @@ export function SettingsTitle({ children }: { children: string }) {
   const theme = useAppTheme();
 
   return (
-    <NativeText
-      numberOfLines={Platform.OS === 'ios' ? undefined : 1}
-      modifiers={
-        Platform.OS === 'ios'
-          ? [font({ textStyle: 'body' }), fixedSize({ horizontal: false, vertical: true })]
-          : undefined
-      }
-      textStyle={{
-        color: theme.colors.text,
-        fontSize: 17,
-        fontWeight: '400',
-        lineHeight: 22,
-      }}
+    <NativeSettingsText
+      color={theme.colors.text}
+      fontSize={17}
+      fontWeight="regular"
+      textStyle="body"
+      lineHeight={22}
+      maxLines={Platform.OS === 'ios' ? undefined : 1}
     >
       {children}
-    </NativeText>
+    </NativeSettingsText>
   );
 }
 
@@ -95,22 +86,15 @@ export function SettingsActionTitle({
         : theme.colors.tint;
 
   return (
-    <NativeText
-      numberOfLines={Platform.OS === 'ios' ? undefined : 1}
-      modifiers={
-        Platform.OS === 'ios'
-          ? [font({ textStyle: 'body' }), fixedSize({ horizontal: false, vertical: true })]
-          : undefined
-      }
-      textStyle={{
-        color,
-        fontSize: 16,
-        fontWeight: '500',
-        lineHeight: 22,
-      }}
+    <NativeSettingsText
+      color={color}
+      fontSize={16}
+      fontWeight="medium"
+      lineHeight={22}
+      maxLines={Platform.OS === 'ios' ? undefined : 1}
     >
       {children}
-    </NativeText>
+    </NativeSettingsText>
   );
 }
 
@@ -127,39 +111,25 @@ export function SettingsSubtitle({
 
   return (
     <>
-      <NativeText
-        numberOfLines={Platform.OS === 'ios' ? undefined : lines}
-        modifiers={
-          Platform.OS === 'ios'
-            ? [font({ textStyle: 'footnote' }), fixedSize({ horizontal: false, vertical: true })]
-            : undefined
-        }
-        textStyle={{
-          color: theme.colors.textSecondary,
-          fontSize: 13,
-          fontWeight: '400',
-          lineHeight: 18,
-        }}
+      <NativeSettingsText
+        color={theme.colors.textSecondary}
+        fontSize={13}
+        textStyle="footnote"
+        lineHeight={18}
+        maxLines={Platform.OS === 'ios' ? undefined : lines}
       >
         {primary}
-      </NativeText>
+      </NativeSettingsText>
       {secondary ? (
-        <NativeText
-          numberOfLines={Platform.OS === 'ios' ? undefined : 2}
-          modifiers={
-            Platform.OS === 'ios'
-              ? [font({ textStyle: 'footnote' }), fixedSize({ horizontal: false, vertical: true })]
-              : undefined
-          }
-          textStyle={{
-            color: theme.colors.textTertiary,
-            fontSize: 13,
-            fontWeight: '400',
-            lineHeight: 17,
-          }}
+        <NativeSettingsText
+          color={theme.colors.textTertiary}
+          fontSize={13}
+          textStyle="footnote"
+          lineHeight={17}
+          maxLines={Platform.OS === 'ios' ? undefined : 2}
         >
           {secondary}
-        </NativeText>
+        </NativeSettingsText>
       ) : null}
     </>
   );
@@ -175,23 +145,16 @@ export function SettingsValue({ label, tone = 'accent' }: { label: string; tone?
         : theme.colors.tint;
 
   return (
-    <NativeText
-      numberOfLines={Platform.OS === 'ios' ? undefined : 1}
-      modifiers={
-        Platform.OS === 'ios'
-          ? [font({ textStyle: 'body' }), fixedSize({ horizontal: false, vertical: true })]
-          : undefined
-      }
-      textStyle={{
-        color,
-        fontSize: 14,
-        fontWeight: '600',
-        lineHeight: 18,
-        textAlign: 'right',
-      }}
+    <NativeSettingsText
+      color={color}
+      fontSize={14}
+      fontWeight="semibold"
+      lineHeight={18}
+      maxLines={Platform.OS === 'ios' ? undefined : 1}
+      textAlign="trailing"
     >
       {label}
-    </NativeText>
+    </NativeSettingsText>
   );
 }
 

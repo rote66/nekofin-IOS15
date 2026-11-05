@@ -1,23 +1,27 @@
 import { useFloatingTabBarInset } from '@/components/navigation/FloatingTabBarInset';
 import { useTranslation } from '@/lib/i18n';
 import { layout, useAppTheme } from '@/lib/theme';
-import { ListItem, Slider, Switch, TextInput } from '@expo/ui';
 import {
   AlertDialog,
+  Box,
   CircularProgressIndicator,
   Column,
+  RNHostView as ComposeRNHostView,
+  TextField as ComposeTextField,
   Host,
   LazyColumn,
+  ListItem,
   RadioButton,
   Row,
+  Slider,
+  Switch,
   Text,
   TextButton,
-  useMaterialColors,
 } from '@expo/ui/jetpack-compose';
 import {
   alpha,
   background,
-  defaultMinSize,
+  clickable,
   fillMaxSize,
   fillMaxWidth,
   height,
@@ -25,17 +29,18 @@ import {
   padding,
   selectable,
   selectableGroup,
-  semantics,
   size,
   weight,
   wrapContentHeight,
 } from '@expo/ui/jetpack-compose/modifiers';
-import { useState, type ComponentProps } from 'react';
+import { useState, type ComponentProps, type ReactElement } from 'react';
 import { useWindowDimensions } from 'react-native';
 
+import { composeOnGloballyPositioned, composeSemantics } from './composeCompatModifiers.android';
 import type * as SharedSettings from './NativeSettings';
 import { NativeSettingsGroup, NativeSettingsRows } from './NativeSettingsGroup.android';
 import { settingsLayout } from './settingsLayout';
+import { useNativeTextFieldBridge } from './useNativeTextFieldBridge';
 
 export type { NativeSettingsOption, NativeSettingsTextFieldProps } from './NativeSettings';
 
@@ -73,12 +78,50 @@ export function NativeSettingsForm({
   );
 }
 
+/** A single inset content row that keeps the original vertical settings layout. */
+export function NativeSettingsColumn({
+  children,
+  spacing = 0,
+  inset = 0,
+}: {
+  children: React.ReactNode;
+  spacing?: number;
+  inset?: number;
+}) {
+  return (
+    <Column
+      verticalArrangement={spacing ? { spacedBy: spacing } : undefined}
+      modifiers={[fillMaxWidth(), ...(inset ? [padding(inset, inset, inset, inset)] : [])]}
+    >
+      {children}
+    </Column>
+  );
+}
+
+/** Bridge small React Native visuals into the platform's native settings row. */
+export function NativeSettingsRNHostView({
+  children,
+  matchContents = true,
+  fillWidthHeight,
+}: {
+  children: ReactElement;
+  matchContents?: boolean;
+  fillWidthHeight?: number;
+}) {
+  const host = <ComposeRNHostView matchContents={matchContents}>{children}</ComposeRNHostView>;
+  return fillWidthHeight ? (
+    <Box modifiers={[fillMaxWidth(), height(fillWidthHeight)]}>{host}</Box>
+  ) : (
+    host
+  );
+}
+
 export function NativeSettingsSection({
   title,
   footer,
   children,
 }: ComponentProps<typeof SharedSettings.NativeSettingsSection>) {
-  const colors = useMaterialColors();
+  const theme = useAppTheme();
   return (
     <Column
       modifiers={[
@@ -93,7 +136,7 @@ export function NativeSettingsSection({
     >
       {title ? (
         <Text
-          color={colors.primary}
+          color={theme.colors.tint}
           style={{ typography: 'labelLarge' }}
           modifiers={[padding(settingsLayout.contentInset, 0, settingsLayout.contentInset, 8)]}
         >
@@ -103,7 +146,7 @@ export function NativeSettingsSection({
       <NativeSettingsGroup>{children}</NativeSettingsGroup>
       {footer ? (
         <Text
-          color={colors.onSurfaceVariant}
+          color={theme.colors.textSecondary}
           style={{ typography: 'bodySmall' }}
           modifiers={[padding(settingsLayout.contentInset, 8, settingsLayout.contentInset, 0)]}
         >
@@ -123,48 +166,128 @@ export function NativeSettingsItem({
   onPress,
   testID,
   modifiers,
+  onPositionChange,
   disabled = false,
   busy = false,
 }: ComponentProps<typeof SharedSettings.NativeSettingsItem>) {
   const theme = useAppTheme();
   return (
     <ListItem
-      leading={leading}
-      supportingText={subtitle}
-      trailing={
-        busy ? <CircularProgressIndicator modifiers={[size(24, 24)]} /> : (trailing ?? value)
-      }
-      onPress={disabled || busy ? undefined : onPress}
       colors={{ containerColor: theme.colors.surface }}
       modifiers={[
         fillMaxWidth(),
         alpha(disabled || busy ? 0.38 : 1),
+        ...(onPress && !disabled && !busy ? [clickable(onPress)] : []),
         ...(testID ? [nativeTestID(testID)] : []),
+        ...(onPositionChange ? [composeOnGloballyPositioned(onPositionChange)] : []),
         ...(modifiers ?? []),
       ]}
     >
-      {title}
+      {leading ? (
+        <ListItem.LeadingContent>{leading as ReactElement}</ListItem.LeadingContent>
+      ) : null}
+      <ListItem.HeadlineContent>
+        {typeof title === 'string' ? <Text>{title}</Text> : title}
+      </ListItem.HeadlineContent>
+      {subtitle ? (
+        <ListItem.SupportingContent>
+          {typeof subtitle === 'string' ? <Text>{subtitle}</Text> : subtitle}
+        </ListItem.SupportingContent>
+      ) : null}
+      {busy || trailing || value ? (
+        <ListItem.TrailingContent>
+          {busy ? (
+            <CircularProgressIndicator modifiers={[size(24, 24)]} />
+          ) : trailing ? (
+            trailing
+          ) : (
+            <Text>{value}</Text>
+          )}
+        </ListItem.TrailingContent>
+      ) : null}
     </ListItem>
   );
 }
 
 export function NativeSettingsTextField({
   label,
-  ...props
+  value,
+  defaultValue,
+  onChangeText,
+  placeholder,
+  editable = true,
+  autoCapitalize,
+  autoCorrect,
+  keyboardType,
+  returnKeyType,
+  onSubmitEditing,
+  testID,
+  ref,
+  trailing,
+  minHeight = settingsLayout.inputMinHeight,
 }: ComponentProps<typeof SharedSettings.NativeSettingsTextField>) {
+  const { initialValue, nativeRef, onNativeValueChange } = useNativeTextFieldBridge({
+    value,
+    defaultValue,
+    onChangeText,
+    forwardedRef: ref,
+  });
+  const keyboardTypeMap = {
+    default: 'text',
+    'email-address': 'email',
+    numeric: 'number',
+    'phone-pad': 'phone',
+    url: 'uri',
+    'decimal-pad': 'decimal',
+  } as const;
+  const imeActionMap = {
+    default: 'default',
+    done: 'done',
+    go: 'go',
+    next: 'next',
+    search: 'search',
+    send: 'send',
+  } as const;
   return (
     <NativeSettingsItem
       title={
-        <TextInput
-          {...props}
+        <ComposeTextField
+          ref={nativeRef}
+          defaultValue={initialValue}
+          onValueChange={onNativeValueChange}
+          enabled={editable}
+          keyboardOptions={{
+            ...(autoCapitalize ? { capitalization: autoCapitalize } : {}),
+            ...(autoCorrect !== undefined ? { autoCorrectEnabled: autoCorrect } : {}),
+            ...(keyboardType ? { keyboardType: keyboardTypeMap[keyboardType] } : {}),
+            ...(returnKeyType ? { imeAction: imeActionMap[returnKeyType] } : {}),
+          }}
+          keyboardActions={
+            onSubmitEditing
+              ? {
+                  onDone: onSubmitEditing,
+                  onGo: onSubmitEditing,
+                  onNext: onSubmitEditing,
+                  onSearch: onSubmitEditing,
+                  onSend: onSubmitEditing,
+                }
+              : undefined
+          }
           modifiers={[
             fillMaxWidth(),
-            defaultMinSize({ minHeight: settingsLayout.inputMinHeight }),
+            height(minHeight),
             wrapContentHeight('centerVertically'),
-            semantics({ contentDescription: label }),
+            composeSemantics(label),
+            ...(testID ? [nativeTestID(testID)] : []),
           ]}
-        />
+        >
+          <ComposeTextField.Label>{label}</ComposeTextField.Label>
+          {placeholder ? (
+            <ComposeTextField.Placeholder>{placeholder}</ComposeTextField.Placeholder>
+          ) : null}
+        </ComposeTextField>
       }
+      trailing={trailing}
     />
   );
 }
@@ -176,16 +299,14 @@ export function NativeSettingsButton({
   accessibilityLabel,
   disabled,
 }: ComponentProps<typeof SharedSettings.NativeSettingsButton>) {
-  const colors = useMaterialColors();
+  const theme = useAppTheme();
   return (
     <TextButton
       onClick={onPress}
       enabled={!disabled}
-      modifiers={
-        accessibilityLabel ? [semantics({ contentDescription: accessibilityLabel })] : undefined
-      }
+      modifiers={accessibilityLabel ? [composeSemantics(accessibilityLabel)] : undefined}
     >
-      <Text color={destructive ? colors.error : colors.primary}>{label}</Text>
+      <Text color={destructive ? theme.colors.danger : theme.colors.tint}>{label}</Text>
     </TextButton>
   );
 }
@@ -206,7 +327,7 @@ export function NativeSettingsSwitch({
       onPress={() => {
         if (!disabled) onValueChange(!value);
       }}
-      trailing={<Switch value={value} onValueChange={onValueChange} disabled={disabled} />}
+      trailing={<Switch value={value} onCheckedChange={onValueChange} enabled={!disabled} />}
       modifiers={[alpha(disabled ? 0.38 : 1)]}
     />
   );
@@ -223,7 +344,7 @@ export function NativeSettingsPicker({
 }: ComponentProps<typeof SharedSettings.NativeSettingsPicker>) {
   const { t: tr } = useTranslation();
   const [open, setOpen] = useState(false);
-  const colors = useMaterialColors();
+  const theme = useAppTheme();
   const { height: windowHeight } = useWindowDimensions();
   const selected = options.find((option) => option.value === value);
   const select = (next: string) => {
@@ -238,7 +359,7 @@ export function NativeSettingsPicker({
         leading={leading}
         subtitle={
           <Column>
-            <Text color={colors.onSurfaceVariant} style={{ typography: 'bodyMedium' }}>
+            <Text color={theme.colors.textSecondary} style={{ typography: 'bodyMedium' }}>
               {selected?.title ?? value}
             </Text>
             {subtitle}
@@ -276,7 +397,7 @@ export function NativeSettingsPicker({
                   <Column modifiers={[weight(1)]}>
                     <Text style={{ typography: 'bodyLarge' }}>{option.title}</Text>
                     {option.subtitle ? (
-                      <Text color={colors.onSurfaceVariant} style={{ typography: 'bodyMedium' }}>
+                      <Text color={theme.colors.textSecondary} style={{ typography: 'bodyMedium' }}>
                         {option.subtitle}
                       </Text>
                     ) : null}
@@ -303,9 +424,9 @@ export function NativeSettingsChoiceList({
   onValueChange,
   disabled = false,
 }: ComponentProps<typeof SharedSettings.NativeSettingsChoiceList>) {
-  const colors = useMaterialColors();
+  const theme = useAppTheme();
   return (
-    <NativeSettingsRows modifiers={[selectableGroup(), semantics({ contentDescription: label })]}>
+    <NativeSettingsRows modifiers={[selectableGroup(), composeSemantics(label)]}>
       {options.map((option) => (
         <Row
           key={option.value}
@@ -331,11 +452,11 @@ export function NativeSettingsChoiceList({
         >
           <RadioButton selected={option.value === value} />
           <Column modifiers={[weight(1)]}>
-            <Text color={colors.onSurface} style={{ typography: 'bodyLarge' }}>
+            <Text color={theme.colors.text} style={{ typography: 'bodyLarge' }}>
               {option.title}
             </Text>
             {option.subtitle ? (
-              <Text color={colors.onSurfaceVariant} style={{ typography: 'bodySmall' }}>
+              <Text color={theme.colors.textSecondary} style={{ typography: 'bodySmall' }}>
                 {option.subtitle}
               </Text>
             ) : null}
@@ -370,8 +491,8 @@ export function NativeSettingsSlider({
             value={value}
             min={min}
             max={max}
-            step={step}
-            disabled={disabled}
+            steps={step ? Math.max(0, Math.round((max - min) / step) - 1) : 0}
+            enabled={!disabled}
             onValueChange={onValueChange}
             modifiers={[fillMaxWidth()]}
           />
@@ -383,6 +504,38 @@ export function NativeSettingsSlider({
 
 export function NativeSettingsText({
   children,
+  color,
+  fontSize,
+  fontWeight,
+  maxLines,
+  lineHeight,
+  textAlign,
 }: ComponentProps<typeof SharedSettings.NativeSettingsText>) {
-  return <Text>{children}</Text>;
+  const composeWeight =
+    fontWeight === 'regular'
+      ? 'normal'
+      : fontWeight === 'medium'
+        ? '500'
+        : fontWeight === 'semibold'
+          ? '600'
+          : fontWeight;
+  return (
+    <Text
+      color={color}
+      maxLines={maxLines}
+      style={{
+        fontSize,
+        fontWeight: composeWeight,
+        ...(lineHeight ? { lineHeight } : {}),
+        ...(textAlign
+          ? {
+              textAlign:
+                textAlign === 'leading' ? 'start' : textAlign === 'trailing' ? 'end' : 'center',
+            }
+          : {}),
+      }}
+    >
+      {children}
+    </Text>
+  );
 }

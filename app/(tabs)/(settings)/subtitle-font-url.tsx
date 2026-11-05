@@ -11,7 +11,6 @@ import { SettingsTitle } from '@/components/ui/SettingsVisual';
 import { useTranslation } from '@/lib/i18n';
 import { toast } from '@/lib/toast';
 import { importCustomSubtitleFont, normalizeFontUrl } from '@/services/customSubtitleFonts';
-import { useNativeState } from '@expo/ui';
 import { useRouter } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import { Keyboard, Platform } from 'react-native';
@@ -20,7 +19,6 @@ export default function SubtitleFontUrl() {
   const { t: tr } = useTranslation();
   const router = useRouter();
   const [url, setUrl] = useState('');
-  const value = useNativeState(url);
   const [busy, setBusy] = useState(false);
   const operation = useRef<AbortController | null>(null);
   useEffect(() => () => operation.current?.abort(), []);
@@ -72,7 +70,7 @@ export default function SubtitleFontUrl() {
         >
           <NativeSettingsTextField
             label={tr('fonts.fileUrl')}
-            value={value}
+            value={url}
             editable={!busy}
             onChangeText={setUrl}
             placeholder="https://example.com/font.ttf"

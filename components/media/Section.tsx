@@ -112,9 +112,7 @@ export const Section = React.memo(function Section({
 
   const hasListItems = isLoading || items.length > 0;
   const renderedList = hasListItems ? (
-    <SafeGlassContainer spacing={0} style={styles.glassGroup}>
-      {listContent}
-    </SafeGlassContainer>
+    <SafeGlassContainer style={styles.glassGroup}>{listContent}</SafeGlassContainer>
   ) : (
     listContent
   );

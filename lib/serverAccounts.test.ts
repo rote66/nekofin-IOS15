@@ -38,6 +38,14 @@ describe('server account selection', () => {
     expect(isSameMediaServer(first, { ...second, remoteServerId: 'another' })).toBe(false);
   });
 
+  it('keeps Emby and Jellyfin as separate visible server cards', () => {
+    const emby = { ...first, id: 'emby-account', type: 'emby' as const };
+    const jellyfin = { ...first, id: 'jellyfin-account' };
+
+    expect(groupServerAccounts([emby, jellyfin])).toEqual([[emby], [jellyfin]]);
+    expect(getActiveServerAccounts([emby, jellyfin], [])).toEqual([emby, jellyfin]);
+  });
+
   it('recognizes legacy accounts by saved addresses without mixing known identities', () => {
     const legacy = {
       ...second,

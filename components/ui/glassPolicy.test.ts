@@ -52,6 +52,10 @@ describe('custom Liquid Glass policy', () => {
 
   it('fills information cards while media cards opt into transparent copy areas', () => {
     const cardSource = readFileSync(join(repositoryRoot, 'components/ui/GlassCard.tsx'), 'utf8');
+    const surfacePolicy = readFileSync(
+      join(repositoryRoot, 'components/ui/glassSurfacePolicy.ts'),
+      'utf8',
+    );
     const transparentMediaSources = [
       'components/media/Card.tsx',
       'components/detail-view/PersonItem.tsx',
@@ -61,7 +65,8 @@ describe('custom Liquid Glass policy', () => {
 
     expect(cardSource).toContain("surface = 'solid'");
     expect(cardSource).toContain('fallbackBackgroundColor ?? theme.colors.surface');
-    expect(cardSource).toContain("surface === 'material'");
+    expect(cardSource).toContain('glassRenderingMode');
+    expect(surfacePolicy).toContain("surface === 'material'");
 
     for (const relativePath of transparentMediaSources) {
       const source = readFileSync(join(repositoryRoot, relativePath), 'utf8');

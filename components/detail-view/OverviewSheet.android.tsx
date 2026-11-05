@@ -1,14 +1,8 @@
 import { NativeBottomSheet } from '@/components/ui/NativeBottomSheet.android';
 import { useTranslation } from '@/lib/i18n';
 import { spacing, useAppTheme } from '@/lib/theme';
-import { Column, Text } from '@expo/ui/jetpack-compose';
-import {
-  fillMaxSize,
-  fillMaxWidth,
-  padding,
-  verticalScroll,
-  weight,
-} from '@expo/ui/jetpack-compose/modifiers';
+import { Column, LazyColumn, Text } from '@expo/ui/jetpack-compose';
+import { fillMaxSize, fillMaxWidth, padding, weight } from '@expo/ui/jetpack-compose/modifiers';
 
 export function OverviewSheet({
   overview,
@@ -30,11 +24,11 @@ export function OverviewSheet({
         <Text color={theme.colors.text} style={{ typography: 'titleLarge', fontWeight: '600' }}>
           {tr('media.overview')}
         </Text>
-        <Column modifiers={[weight(1), fillMaxWidth(), verticalScroll()]}>
+        <LazyColumn modifiers={[weight(1), fillMaxWidth()]}>
           <Text color={theme.colors.text} style={{ fontSize: 17, lineHeight: 24 }}>
             {overview}
           </Text>
-        </Column>
+        </LazyColumn>
       </Column>
     </NativeBottomSheet>
   );

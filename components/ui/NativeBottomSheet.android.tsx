@@ -3,7 +3,7 @@ import { AndroidMaterialSurface } from '@/modules/native-layout/AndroidMaterialS
 import { Host, ModalBottomSheet, type ModalBottomSheetRef } from '@expo/ui/jetpack-compose';
 import { testID as nativeTestID } from '@expo/ui/jetpack-compose/modifiers';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import type { ColorValue } from 'react-native';
+import { StyleSheet, View, type ColorValue } from 'react-native';
 
 /** Compose owns the window, dragging, scrolling and dismissal animation. */
 export function NativeBottomSheet({
@@ -42,28 +42,30 @@ export function NativeBottomSheet({
 
   if (!mounted) return null;
   return (
-    <Host style={{ position: 'absolute' }} pointerEvents="none" colorScheme={theme.colorScheme}>
-      <ModalBottomSheet
-        ref={sheet}
-        onDismissRequest={onDismiss}
-        skipPartiallyExpanded={skipPartiallyExpanded}
-        containerColor={material ? 'transparent' : (containerColor ?? theme.colors.background)}
-        showDragHandle={!material}
-        contentColor={theme.colors.text}
-        modifiers={testID ? [nativeTestID(testID)] : undefined}
-      >
-        {material ? (
-          <AndroidMaterialSurface
-            color={containerColor ?? theme.colors.background}
-            cornerRadius={28}
-            sheetDragHandle
-          >
-            {children}
-          </AndroidMaterialSurface>
-        ) : (
-          children
-        )}
-      </ModalBottomSheet>
-    </Host>
+    <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+      <Host style={StyleSheet.absoluteFill} colorScheme={theme.colorScheme}>
+        <ModalBottomSheet
+          ref={sheet}
+          onDismissRequest={onDismiss}
+          skipPartiallyExpanded={skipPartiallyExpanded}
+          containerColor={material ? 'transparent' : (containerColor ?? theme.colors.background)}
+          showDragHandle={!material}
+          contentColor={theme.colors.text}
+          modifiers={testID ? [nativeTestID(testID)] : undefined}
+        >
+          {material ? (
+            <AndroidMaterialSurface
+              color={containerColor ?? theme.colors.background}
+              cornerRadius={28}
+              sheetDragHandle
+            >
+              {children}
+            </AndroidMaterialSurface>
+          ) : (
+            children
+          )}
+        </ModalBottomSheet>
+      </Host>
+    </View>
   );
 }

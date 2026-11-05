@@ -29,11 +29,7 @@ export function ServerFormButton({
   const NativeButton = variant === 'text' ? TextButton : Button;
 
   return (
-    <Host
-      style={{ height: 52, width: '100%' }}
-      colorScheme={theme.colorScheme}
-      seedColor={color ?? theme.colors.tint}
-    >
+    <Host style={{ height: 52, width: '100%' }} colorScheme={theme.colorScheme}>
       <NativeButton
         onClick={onPress}
         enabled={!disabled && !busy}

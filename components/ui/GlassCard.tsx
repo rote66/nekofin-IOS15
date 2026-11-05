@@ -1,3 +1,5 @@
+import { useReduceTransparency } from '@/hooks/useReduceTransparency';
+import { isBelowUpstreamIOSMinimum } from '@/lib/compat/ios15';
 import { useAppTheme } from '@/lib/theme';
 import { BlurView } from 'expo-blur';
 import {
@@ -7,7 +9,9 @@ import {
   type GlassViewProps,
 } from 'expo-glass-effect';
 import { PropsWithChildren } from 'react';
-import { StyleProp, StyleSheet, View, ViewProps, ViewStyle } from 'react-native';
+import { Platform, StyleProp, StyleSheet, View, ViewProps, ViewStyle } from 'react-native';
+
+import { glassRenderingMode, opaqueGlassFallbackColor } from './glassSurfacePolicy';
 
 type GlassCardProps = PropsWithChildren<
   Omit<GlassViewProps, 'children' | 'style'> & {
@@ -32,9 +36,7 @@ export function GlassShadow({ children, radius = 12, style }: GlassShadowProps) 
   return <View style={[{ borderRadius: radius }, style]}>{children}</View>;
 }
 
-type SafeGlassContainerProps = PropsWithChildren<ViewProps & { spacing?: number }>;
-
-export function SafeGlassContainer({ spacing: _spacing, ...props }: SafeGlassContainerProps) {
+export function SafeGlassContainer(props: PropsWithChildren<ViewProps>) {
   return <View {...props} />;
 }
 
@@ -52,28 +54,57 @@ export function GlassCard({
   ...props
 }: GlassCardProps) {
   const theme = useAppTheme();
+  const reduceTransparency = useReduceTransparency();
+  const legacyIOS = isBelowUpstreamIOSMinimum(Platform.OS, Platform.Version);
   const useLiquidGlass = useGlassEffect && isLiquidGlassAvailable() && isGlassEffectAPIAvailable();
   const useStandardMaterial = !useGlassEffect && surface === 'material';
+  const renderingMode = legacyIOS
+    ? glassRenderingMode({
+        useGlassEffect,
+        surface,
+        nativeGlassAvailable: useLiquidGlass,
+        reduceTransparency,
+      })
+    : useLiquidGlass
+      ? 'native'
+      : useGlassEffect || useStandardMaterial
+        ? 'blur'
+        : surface === 'transparent'
+          ? 'transparent'
+          : 'solid';
   const blurTint =
     colorScheme === 'dark' || colorScheme === 'light'
       ? colorScheme
       : theme.colorScheme === 'dark' || theme.colorScheme === 'light'
         ? theme.colorScheme
         : 'default';
-  const backgroundColor = useGlassEffect
-    ? useLiquidGlass
+  // iOS 16.4+ and Android retain the upstream fallback colors/materials.
+  // Only unsupported old iOS gets the more conservative accessibility fill.
+  const backgroundColor = legacyIOS
+    ? renderingMode === 'native' || renderingMode === 'transparent'
       ? 'transparent'
-      : (fallbackBackgroundColor ?? theme.colors.surface)
-    : useStandardMaterial
-      ? theme.isDark
-        ? 'rgba(28,28,30,0.46)'
-        : 'rgba(242,242,247,0.34)'
-      : surface === 'solid'
-        ? (fallbackBackgroundColor ?? theme.colors.surface)
-        : 'transparent';
+      : renderingMode === 'blur'
+        ? (fallbackBackgroundColor ??
+          (theme.isDark ? 'rgba(28,28,30,0.46)' : 'rgba(242,242,247,0.34)'))
+        : surface === 'transparent'
+          ? 'transparent'
+          : reduceTransparency
+            ? opaqueGlassFallbackColor(fallbackBackgroundColor, theme.colors.surface)
+            : (fallbackBackgroundColor ?? theme.colors.surface)
+    : useGlassEffect
+      ? useLiquidGlass
+        ? 'transparent'
+        : (fallbackBackgroundColor ?? theme.colors.surface)
+      : useStandardMaterial
+        ? theme.isDark
+          ? 'rgba(28,28,30,0.46)'
+          : 'rgba(242,242,247,0.34)'
+        : surface === 'solid'
+          ? (fallbackBackgroundColor ?? theme.colors.surface)
+          : 'transparent';
   const surfaceStyle = [styles.surface, { backgroundColor, borderRadius: radius }, style];
 
-  if (useLiquidGlass) {
+  if (renderingMode === 'native') {
     return (
       <GlassView
         colorScheme={colorScheme}
@@ -88,7 +119,7 @@ export function GlassCard({
     );
   }
 
-  if (useGlassEffect || useStandardMaterial) {
+  if (renderingMode === 'blur') {
     return (
       <BlurView
         intensity={useGlassEffect ? 42 : 32}

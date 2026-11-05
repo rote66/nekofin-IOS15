@@ -1,11 +1,32 @@
 import type { ResolvedColorScheme } from '@/lib/contexts/ThemePreferenceContext';
-import { getMaterialColors } from '@expo/ui/jetpack-compose';
+import { requireOptionalNativeModule } from 'expo-modules-core';
 
 import { createAppTheme } from './theme';
 
+type MaterialColors = {
+  primary: string;
+  surface: string;
+  surfaceContainerLow: string;
+  surfaceContainerHigh: string;
+  surfaceContainerHighest: string;
+  onSurface: string;
+  onSurfaceVariant: string;
+  outlineVariant: string;
+  onPrimary: string;
+  error: string;
+  scrim: string;
+};
+
+const nativeLayout = requireOptionalNativeModule<{
+  getMaterialColors: (scheme: string) => MaterialColors | null;
+}>('NativeLayout');
+
 export function createPlatformTheme(colorScheme: ResolvedColorScheme) {
-  // No seed: use the device wallpaper on Android 12+, Material 3 baseline otherwise.
-  const colors = getMaterialColors({ scheme: colorScheme });
+  // SDK 55 removed the JS helper, but Compose still supports the same Material
+  // 3 dynamic palette. Read it through the app's native layout module so
+  // Android 12+ keeps its wallpaper-derived colors.
+  const colors = nativeLayout?.getMaterialColors(colorScheme);
+  if (!colors) return createAppTheme({ colorScheme });
   const theme = createAppTheme({ colorScheme, accentColor: colors.primary });
   return {
     ...theme,

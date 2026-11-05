@@ -5,8 +5,16 @@ import {
 } from '@/lib/navigationMetrics';
 import { useAppTheme } from '@/lib/theme';
 import { PopupMenu, PopupMenuItem } from '@/modules/native-layout/PopupMenu.android';
-import { Column, HorizontalDivider, Host, Icon, Image, Row, Text } from '@expo/ui/jetpack-compose';
-import { clip, Shapes, size } from '@expo/ui/jetpack-compose/modifiers';
+import {
+  Column,
+  HorizontalDivider,
+  Host,
+  Icon,
+  RNHostView,
+  Row,
+  Text,
+} from '@expo/ui/jetpack-compose';
+import { Image as ExpoImage } from 'expo-image';
 import { Stack } from 'expo-router';
 import { Children, createContext, useContext, useState, type ComponentProps } from 'react';
 import type { ImageSourcePropType } from 'react-native';
@@ -61,7 +69,7 @@ export function HeaderButton({
       <Icon
         source={icon}
         size={NAVIGATION_ICON_SIZE}
-        tint={iconRenderingMode === 'original' ? null : (tintColor ?? theme.colors.text)}
+        tint={iconRenderingMode === 'original' ? undefined : (tintColor ?? theme.colors.text)}
         contentDescription={
           accessibilityLabel ?? (typeof children === 'string' ? children : undefined)
         }
@@ -75,7 +83,7 @@ function HeaderAvatar({
   label,
   diameter,
 }: {
-  source: ComponentProps<typeof Image>['source'];
+  source: ImageSourcePropType;
   label?: string;
   diameter: number;
 }) {
@@ -84,18 +92,18 @@ function HeaderAvatar({
     <Icon
       source={require('../../assets/drawables/account.xml')}
       size={diameter}
-      tint={null}
       contentDescription={label}
     />
   ) : (
-    <Image
-      source={source}
-      contentScale="crop"
-      alignment="center"
-      contentDescription={label}
-      modifiers={[size(diameter, diameter), clip(Shapes.Circle)]}
-      onError={() => setFailed(true)}
-    />
+    <RNHostView matchContents>
+      <ExpoImage
+        source={source}
+        contentFit="cover"
+        accessibilityLabel={label}
+        style={{ width: diameter, height: diameter, borderRadius: diameter / 2 }}
+        onError={() => setFailed(true)}
+      />
+    </RNHostView>
   );
 }
 
@@ -163,7 +171,7 @@ export function HeaderMenu({
           ) : icon && typeof icon !== 'string' ? (
             <Icon
               source={icon as ImageSourcePropType}
-              tint={iconRenderingMode === 'original' ? null : (tintColor ?? theme.colors.text)}
+              tint={iconRenderingMode === 'original' ? undefined : (tintColor ?? theme.colors.text)}
               size={iconSize}
               contentDescription={accessibilityLabel}
             />
@@ -204,7 +212,11 @@ export function HeaderMenuAction({
     >
       {icon && typeof icon !== 'string' ? (
         <PopupMenuItem.LeadingIcon>
-          <Icon source={icon} size={24} tint={iconRenderingMode === 'original' ? null : color} />
+          <Icon
+            source={icon}
+            size={24}
+            tint={iconRenderingMode === 'original' ? undefined : color}
+          />
         </PopupMenuItem.LeadingIcon>
       ) : null}
       <PopupMenuItem.Text>

@@ -28,7 +28,7 @@ export function ServerTypePicker({ onSelect }: { onSelect: (type: MediaServerTyp
           <NativeSettingsItem
             key={type}
             title={label}
-            leading={<Icon source={getServerMenuIcon(type)} size={36} tint={null} />}
+            leading={<Icon source={getServerMenuIcon(type)} size={36} />}
             trailing={
               <Icon
                 source={require('../../assets/drawables/chevron_left.xml')}

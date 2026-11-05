@@ -243,7 +243,7 @@ export function HomeServerCard({
                 ? tr('server.accountCount', { count: accountCount })
                 : formatServerAge(server.createdAt)}
             </Text>
-            <SafeGlassContainer spacing={8} style={styles.footerActions}>
+            <SafeGlassContainer style={styles.footerActions}>
               <ServerCardAction
                 accessibilityLabel={tr('server.manageNamedAccounts', { name: server.name })}
                 onPress={onAccounts}

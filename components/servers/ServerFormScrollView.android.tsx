@@ -1,5 +1,5 @@
 import PageScrollView from '@/components/PageScrollView';
-import { useHeaderHeight } from 'expo-router/react-navigation';
+import { useHeaderHeight } from '@react-navigation/elements';
 import type { ComponentProps } from 'react';
 import { KeyboardAvoidingView, StyleSheet } from 'react-native';
 

@@ -1,4 +1,5 @@
 import { GlassCard } from '@/components/ui/GlassCard';
+import { useReduceTransparency } from '@/hooks/useReduceTransparency';
 import {
   isGlassEffectAPIAvailable,
   isLiquidGlassAvailable,
@@ -25,7 +26,7 @@ export function PlayerGlassSurface({
   visible,
 }: PlayerGlassSurfaceProps) {
   const [reduceMotion, setReduceMotion] = useState(false);
-  const [reduceTransparency, setReduceTransparency] = useState(false);
+  const reduceTransparency = useReduceTransparency();
   const liquidGlassAvailable = useMemo(
     () => isLiquidGlassAvailable() && isGlassEffectAPIAvailable(),
     [],
@@ -42,19 +43,13 @@ export function PlayerGlassSurface({
 
   useEffect(() => {
     void AccessibilityInfo.isReduceMotionEnabled().then(setReduceMotion);
-    void AccessibilityInfo.isReduceTransparencyEnabled().then(setReduceTransparency);
     const motionSubscription = AccessibilityInfo.addEventListener(
       'reduceMotionChanged',
       setReduceMotion,
     );
-    const transparencySubscription = AccessibilityInfo.addEventListener(
-      'reduceTransparencyChanged',
-      setReduceTransparency,
-    );
 
     return () => {
       motionSubscription.remove();
-      transparencySubscription.remove();
     };
   }, []);
 

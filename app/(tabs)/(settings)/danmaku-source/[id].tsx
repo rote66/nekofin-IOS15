@@ -7,13 +7,13 @@ import {
   NativeSettingsSection,
   NativeSettingsSwitch,
   NativeSettingsTextField,
+  type NativeSettingsTextFieldRef,
 } from '@/components/ui/NativeSettings';
 import { SettingsActionTitle, SettingsTitle } from '@/components/ui/SettingsVisual';
 import { useDanmakuSources } from '@/lib/contexts/DanmakuSourcesContext';
 import { useTranslation } from '@/lib/i18n';
 import { toast } from '@/lib/toast';
 import { normalizeDanmakuApiUrl } from '@/services/danmakuSources';
-import { useNativeState, type TextInputRef } from '@expo/ui';
 import { randomUUID } from 'expo-crypto';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
@@ -28,11 +28,9 @@ export default function DanmakuSourceEditor() {
   const [name, setName] = useState(existing?.name ?? '');
   const [address, setAddress] = useState(existing?.baseUrl ?? '');
   const [enabled, setEnabled] = useState(existing?.enabled ?? true);
-  const nameState = useNativeState(name);
-  const addressState = useNativeState(address);
   const [error, setError] = useState<{ field: 'name' | 'address'; message: string } | null>(null);
-  const nameRef = useRef<TextInputRef>(null);
-  const addressRef = useRef<TextInputRef>(null);
+  const nameRef = useRef<NativeSettingsTextFieldRef>(null);
+  const addressRef = useRef<NativeSettingsTextFieldRef>(null);
   useEffect(() => {
     const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
       if (!Keyboard.isVisible()) return false;
@@ -97,7 +95,7 @@ export default function DanmakuSourceEditor() {
           <NativeSettingsTextField
             label={tr('danmaku.apiName')}
             ref={nameRef}
-            value={nameState}
+            value={name}
             onChangeText={(text) => {
               setName(text);
               if (error?.field === 'name') setError(null);
@@ -115,7 +113,7 @@ export default function DanmakuSourceEditor() {
           <NativeSettingsTextField
             label={tr('danmaku.apiUrl')}
             ref={addressRef}
-            value={addressState}
+            value={address}
             onChangeText={(text) => {
               setAddress(text);
               if (error?.field === 'address') setError(null);

@@ -1,6 +1,5 @@
 import { useAppTheme } from '@/lib/theme';
-import { Button, Host, RNHostView, Row, Text } from '@expo/ui';
-import { ActivityIndicator } from 'react-native';
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 
 export type ServerFormButtonProps = {
   title: string;
@@ -26,30 +25,33 @@ export function ServerFormButton({
         ? (color ?? theme.colors.tint)
         : theme.colors.inverseText;
   return (
-    <Host
-      style={{ height: 52, width: '100%' }}
-      colorScheme={theme.colorScheme}
-      seedColor={color ?? theme.colors.tint}
+    <Pressable
+      accessibilityRole="button"
+      disabled={disabled || busy}
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.button,
+        {
+          backgroundColor: variant === 'filled' ? (color ?? theme.colors.tint) : 'transparent',
+          opacity: disabled || busy ? 0.5 : pressed ? 0.8 : 1,
+        },
+      ]}
     >
-      <Button
-        onPress={onPress}
-        disabled={disabled || busy}
-        variant={variant}
-        style={{ height: 52, width: '100%' }}
-      >
-        <Row alignment="center" spacing={8}>
-          {busy ? (
-            <RNHostView matchContents>
-              <ActivityIndicator
-                size="small"
-                color={contentColor}
-                style={{ width: 20, height: 20 }}
-              />
-            </RNHostView>
-          ) : null}
-          <Text textStyle={{ color: contentColor }}>{title}</Text>
-        </Row>
-      </Button>
-    </Host>
+      <View style={styles.content}>
+        {busy ? <ActivityIndicator size="small" color={contentColor} /> : null}
+        <Text style={{ color: contentColor, fontSize: 16, fontWeight: '600' }}>{title}</Text>
+      </View>
+    </Pressable>
   );
 }
+
+const styles = StyleSheet.create({
+  button: {
+    height: 52,
+    width: '100%',
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  content: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
+});

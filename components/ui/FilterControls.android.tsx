@@ -1,7 +1,8 @@
+import { composeSemantics } from '@/components/ui/composeCompatModifiers.android';
 import { useAppTheme } from '@/lib/theme';
 import { PopupMenu, PopupMenuItem } from '@/modules/native-layout/PopupMenu.android';
 import { FilterChip, Host, Icon, Row, Text } from '@expo/ui/jetpack-compose';
-import { rotate, semantics } from '@expo/ui/jetpack-compose/modifiers';
+import { rotate } from '@expo/ui/jetpack-compose/modifiers';
 import { useRef, useState } from 'react';
 
 import type { FilterButtonProps, FilterChoiceProps, FilterRowProps } from './filterControlTypes';
@@ -55,7 +56,7 @@ export function FilterButton({ label, title, options, onSelect }: FilterButtonPr
             setExpanded(true);
           }}
           elevation={0}
-          modifiers={[semantics({ contentDescription: title ?? label })]}
+          modifiers={[composeSemantics(title ?? label)]}
         >
           <FilterChip.Label>
             <Text style={{ typography: 'labelLarge', fontSize: 13 }}>{label}</Text>

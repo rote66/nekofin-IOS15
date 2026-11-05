@@ -1,7 +1,7 @@
 import { createAppTheme, useAppTheme } from '@/lib/theme';
 import { PopupMenu, PopupMenuItem } from '@/modules/native-layout/PopupMenu.android';
 import { Box, Column, HorizontalDivider, Host, Icon, Text } from '@expo/ui/jetpack-compose';
-import { combinedClickable, fillMaxSize } from '@expo/ui/jetpack-compose/modifiers';
+import { clickable, fillMaxSize } from '@expo/ui/jetpack-compose/modifiers';
 import type {
   MenuComponentProps,
   MenuComponentRef,
@@ -119,7 +119,7 @@ export const MenuView = forwardRef<MenuComponentRef, Props>(function MenuView(
             <PopupMenuItem.LeadingIcon>
               <Icon
                 source={image}
-                tint={action.imageColor === null ? null : menuColor(action.imageColor, color)}
+                tint={action.imageColor === null ? undefined : menuColor(action.imageColor, color)}
                 size={24}
               />
             </PopupMenuItem.LeadingIcon>
@@ -185,25 +185,23 @@ export const MenuView = forwardRef<MenuComponentRef, Props>(function MenuView(
         >
           {children}
           {menuMounted ? (
-            <Host
-              pointerEvents="none"
-              style={StyleSheet.absoluteFill}
-              colorScheme={theme.colorScheme}
-            >
-              <PopupMenu
-                expanded={expanded}
-                onDismissRequest={close}
-                onDismissed={() => {
-                  if (!isOpen.current) setMenuMounted(false);
-                }}
-                color={theme.colors.background}
-                textColor={theme.colors.text}
-                alignEnd={isAnchoredToRight}
-              >
-                <Box modifiers={[fillMaxSize()]} />
-                <PopupMenu.Items>{renderActions(actions)}</PopupMenu.Items>
-              </PopupMenu>
-            </Host>
+            <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+              <Host style={StyleSheet.absoluteFill} colorScheme={theme.colorScheme}>
+                <PopupMenu
+                  expanded={expanded}
+                  onDismissRequest={close}
+                  onDismissed={() => {
+                    if (!isOpen.current) setMenuMounted(false);
+                  }}
+                  color={theme.colors.background}
+                  textColor={theme.colors.text}
+                  alignEnd={isAnchoredToRight}
+                >
+                  <Box modifiers={[fillMaxSize()]} />
+                  <PopupMenu.Items>{renderActions(actions)}</PopupMenu.Items>
+                </PopupMenu>
+              </Host>
+            </View>
           ) : null}
         </View>
       </GestureDetector>
@@ -235,18 +233,7 @@ export const MenuView = forwardRef<MenuComponentRef, Props>(function MenuView(
           textColor={theme.colors.text}
           alignEnd={isAnchoredToRight}
         >
-          <Box
-            modifiers={[
-              fillMaxSize(),
-              combinedClickable(
-                {
-                  onClick: shouldOpenOnLongPress ? undefined : open,
-                  onLongClick: shouldOpenOnLongPress ? open : undefined,
-                },
-                { indication: false },
-              ),
-            ]}
-          />
+          <Box modifiers={[fillMaxSize(), clickable(open, { indication: false })]} />
           <PopupMenu.Items>{renderActions(actions)}</PopupMenu.Items>
         </PopupMenu>
       </Host>
