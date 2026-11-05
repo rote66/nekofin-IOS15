@@ -1,0 +1,112 @@
+diff --git a/android/src/main/java/expo/modules/ui/ModifierRegistry.kt b/android/src/main/java/expo/modules/ui/ModifierRegistry.kt
+index c516cbefc8319443b41c8526453d47730eb74d57..c6c178096f7fbc6c32e2ee313e05535aeedc210e 100644
+--- a/android/src/main/java/expo/modules/ui/ModifierRegistry.kt
++++ b/android/src/main/java/expo/modules/ui/ModifierRegistry.kt
+@@ -47,6 +47,10 @@ import androidx.compose.ui.graphics.TransformOrigin
+ import androidx.compose.ui.graphics.graphicsLayer
+ import androidx.compose.ui.unit.dp
+ import androidx.compose.ui.platform.LocalDensity
++import androidx.compose.ui.layout.onGloballyPositioned
++import androidx.compose.ui.layout.positionInWindow
++import androidx.compose.ui.semantics.contentDescription
++import androidx.compose.ui.semantics.semantics
+ import androidx.compose.ui.zIndex
+ import expo.modules.kotlin.AppContext
+ import expo.modules.kotlin.records.Field
+@@ -160,6 +164,10 @@ internal data class TestIDParams(
+   @Field val testID: String? = null
+ ) : Record
+ 
++internal data class SemanticsParams(
++  @Field val contentDescription: String? = null
++) : Record
++
+ internal enum class BuiltinShapeType(val value: String) : Enumerable {
+   RECTANGLE("rectangle"),
+   CIRCLE("circle"),
+@@ -572,6 +580,30 @@ object ModifierRegistry {
+       )
+     }
+ 
++    // Backport the SDK57 modifiers still used by this app on Android.
++    register("semantics") { map, _, _, _ ->
++      val params = recordFromMap<SemanticsParams>(map)
++      Modifier.semantics {
++        params.contentDescription?.let { contentDescription = it }
++      }
++    }
++
++    register("onGloballyPositioned") { _, _, _, eventDispatcher ->
++      val density = LocalDensity.current.density
++      Modifier.onGloballyPositioned { coordinates ->
++        val position = coordinates.positionInWindow()
++        eventDispatcher(
++          "onGloballyPositioned",
++          mapOf(
++            "x" to position.x / density,
++            "y" to position.y / density,
++            "width" to coordinates.size.width / density,
++            "height" to coordinates.size.height / density
++          )
++        )
++      }
++    }
++
+     // ExposedDropdownMenuBox scope-dependent modifier
+     register("menuAnchor") { map, _, _, _ ->
+       val dropdownScope = LocalExposedDropdownMenuBoxScope.current
+diff --git a/android/src/main/java/expo/modules/ui/BottomSheetView.kt b/android/src/main/java/expo/modules/ui/BottomSheetView.kt
+--- a/android/src/main/java/expo/modules/ui/BottomSheetView.kt
++++ b/android/src/main/java/expo/modules/ui/BottomSheetView.kt
+@@ -13,6 +13,14 @@
+ import androidx.compose.material3.contentColorFor
+ import androidx.compose.material3.rememberModalBottomSheetState
+ import androidx.compose.runtime.Composable
++import androidx.compose.runtime.DisposableEffect
++import androidx.compose.runtime.remember
+ import androidx.compose.runtime.MutableState
+ import androidx.compose.runtime.mutableStateOf
+ import androidx.compose.runtime.rememberCoroutineScope
++import androidx.compose.ui.platform.LocalView
++import androidx.compose.ui.window.DialogWindowProvider
++import androidx.core.view.ViewCompat
++import androidx.core.view.WindowCompat
++import androidx.core.view.WindowInsetsCompat
++import androidx.core.view.WindowInsetsControllerCompat
+@@ -29,3 +37,20 @@
+ import expo.modules.kotlin.views.ExpoComposeView
+ 
++/** Keep the Compose dialog's system bars aligned with the activity when a sheet opens. */
++@Composable
++private fun SynchronizeSystemBars(activityBars: Pair<Boolean, Boolean>?) {
++  val window = (LocalView.current.parent as? DialogWindowProvider)?.window ?: return
++  DisposableEffect(window) {
++    WindowCompat.setDecorFitsSystemWindows(window, false)
++    WindowCompat.getInsetsController(window, window.decorView).apply {
++      systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
++      activityBars?.let { (statusVisible, navigationVisible) ->
++        if (statusVisible) show(WindowInsetsCompat.Type.statusBars()) else hide(WindowInsetsCompat.Type.statusBars())
++        if (navigationVisible) show(WindowInsetsCompat.Type.navigationBars()) else hide(WindowInsetsCompat.Type.navigationBars())
++      }
++    }
++    onDispose { }
++  }
++}
++
+ data class ModalBottomSheetPropertiesRecord(
+@@ -68,3 +93,10 @@
+   @Composable
+   override fun ComposableScope.Content() {
++    val activityWindow = appContext.currentActivity?.window
++    val activityBars = remember(activityWindow) {
++      activityWindow?.decorView?.let { ViewCompat.getRootWindowInsets(it) }?.let {
++        it.isVisible(WindowInsetsCompat.Type.statusBars()) to
++          it.isVisible(WindowInsetsCompat.Type.navigationBars())
++      }
++    }
+     val sheetState = rememberModalBottomSheetState(props.skipPartiallyExpanded.value)
+@@ -102,3 +134,4 @@
+       modifier = ModifierRegistry.applyModifiers(props.modifiers.value, appContext, this@Content, globalEventDispatcher)
+     ) {
++      SynchronizeSystemBars(activityBars)
+       Children(ComposableScope(), filter = { !isSlotView(it) })

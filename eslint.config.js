@@ -4,15 +4,22 @@ const expoConfig = require('eslint-config-expo/flat');
 const reactHooksPlugin = require('eslint-plugin-react-hooks');
 const typescriptEslintPlugin = require('@typescript-eslint/eslint-plugin');
 
+// Expo SDK 55 bundles an older react-hooks plugin. Replace its registration
+// (rather than registering the same plugin twice) to retain React Compiler rules.
+const configs = expoConfig.map((config) =>
+  config.plugins?.['react-hooks']
+    ? { ...config, plugins: { ...config.plugins, 'react-hooks': reactHooksPlugin } }
+    : config,
+);
+
 module.exports = defineConfig([
   {
     ignores: ['.expo/**', '.yalc/**', 'dist/**', 'build/**', 'node_modules/**'],
   },
-  expoConfig,
+  configs,
   {
     plugins: {
       '@typescript-eslint': typescriptEslintPlugin,
-      'react-hooks': reactHooksPlugin,
     },
     settings: {
       'import/core-modules': ['react-native-ios-context-menu'],

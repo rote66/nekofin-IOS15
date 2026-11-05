@@ -23,7 +23,7 @@ fi
 test_arch="$(uname -m)"
 xcrun --sdk iphonesimulator swiftc \
   -sdk "$(xcrun --sdk iphonesimulator --show-sdk-path)" \
-  -target "$test_arch-apple-ios16.4-simulator" \
+  -target "$test_arch-apple-ios15.1-simulator" \
   "$test_dir/../ios/StrokeTextInternalView.swift" \
   "$test_dir/StrokeTextTests.swift" \
   -o "$test_build_dir/StrokeTextTests"

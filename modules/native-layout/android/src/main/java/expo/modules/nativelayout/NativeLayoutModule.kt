@@ -1,6 +1,12 @@
 package expo.modules.nativelayout
 
 import android.os.Build
+import androidx.compose.material3.darkColorScheme
+import androidx.compose.material3.dynamicDarkColorScheme
+import androidx.compose.material3.dynamicLightColorScheme
+import androidx.compose.material3.lightColorScheme
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
 import expo.modules.kotlin.records.Field
@@ -24,6 +30,37 @@ class SidebarServer : Record {
 class NativeLayoutModule : Module() {
   override fun definition() = ModuleDefinition {
     Name("NativeLayout")
+    Function("getMaterialColors") { scheme: String ->
+      val context = appContext.currentActivity ?: appContext.reactContext ?: return@Function null
+      val colors = when {
+        Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && scheme == "dark" ->
+          dynamicDarkColorScheme(context)
+        Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> dynamicLightColorScheme(context)
+        scheme == "dark" -> darkColorScheme()
+        else -> lightColorScheme()
+      }
+      fun hex(color: Color): String {
+        val argb = color.toArgb()
+        return "#%02X%02X%02X".format(
+          (argb shr 16) and 0xff,
+          (argb shr 8) and 0xff,
+          argb and 0xff
+        )
+      }
+      mapOf(
+        "primary" to hex(colors.primary),
+        "surface" to hex(colors.surface),
+        "surfaceContainerLow" to hex(colors.surfaceContainerLow),
+        "surfaceContainerHigh" to hex(colors.surfaceContainerHigh),
+        "surfaceContainerHighest" to hex(colors.surfaceContainerHighest),
+        "onSurface" to hex(colors.onSurface),
+        "onSurfaceVariant" to hex(colors.onSurfaceVariant),
+        "outlineVariant" to hex(colors.outlineVariant),
+        "onPrimary" to hex(colors.onPrimary),
+        "error" to hex(colors.error),
+        "scrim" to hex(colors.scrim)
+      )
+    }
     Function("isWindowOrientationFlexible") {
       val activity = appContext.currentActivity ?: return@Function false
       // Multi-window ignores orientation locks. Android 16+ also ignores them

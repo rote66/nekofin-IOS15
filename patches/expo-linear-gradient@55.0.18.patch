@@ -1,0 +1,18 @@
+diff --git a/ios/LinearGradientView.swift b/ios/LinearGradientView.swift
+index 6ef1951cb3da5956954f04006521587ad85e7453..e0be211b9aedca6b1e4d13c39ad7b7071d7cf12e 100644
+--- a/ios/LinearGradientView.swift
++++ b/ios/LinearGradientView.swift
+@@ -23,6 +23,13 @@ final class LinearGradientView: ExpoView {
+   #if !os(macOS)
+   override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
+     super.traitCollectionDidChange(previousTraitCollection)
++    // Navigation can change non-color traits. Keep the existing gradient bitmap
++    // unless its colors or display scale need to be rendered again.
++    guard previousTraitCollection == nil ||
++      traitCollection.hasDifferentColorAppearance(comparedTo: previousTraitCollection) ||
++      traitCollection.displayScale != previousTraitCollection?.displayScale else {
++      return
++    }
+     layer.setNeedsDisplay()
+   }
+   #else

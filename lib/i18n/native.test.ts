@@ -1,4 +1,5 @@
 import { readFileSync } from 'node:fs';
+import { URL } from 'node:url';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { i18n, resources } from './index';

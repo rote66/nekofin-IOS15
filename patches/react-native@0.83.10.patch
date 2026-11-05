@@ -1,0 +1,143 @@
+diff --git a/React/Fabric/Mounting/RCTComponentViewFactory.mm b/React/Fabric/Mounting/RCTComponentViewFactory.mm
+index 608d75cadf9243244541ea61cbf8908244d6e0b8..0c6b0735e7be43a530c1f2b5aea2528dcf698fcc 100644
+--- a/React/Fabric/Mounting/RCTComponentViewFactory.mm
++++ b/React/Fabric/Mounting/RCTComponentViewFactory.mm
+@@ -67,6 +67,21 @@ static Class<RCTComponentViewProtocol> RCTComponentViewClassWithName(const char
+   return RCTFabricComponentsProvider(componentName);
+ }
+ 
++// An unknown Fabric handle must never be mounted with UnimplementedView's
++// updateProps implementation: it assumes UnimplementedViewProps, whereas the
++// mounted node can contain a completely different, incompatible props class.
++// Keep the view hierarchy intact until the provider is registered, without
++// interpreting foreign props or creating a fake red error label.
++@interface RCTMissingComponentView : RCTViewComponentView
++@end
++
++@implementation RCTMissingComponentView
++- (void)updateProps:(const Props::Shared &)props oldProps:(const Props::Shared &)oldProps
++{
++  // Intentionally do not cast or forward arbitrary native component props.
++}
++@end
++
+ @implementation RCTComponentViewFactory {
+   std::unordered_map<ComponentHandle, RCTComponentViewClassDescriptor> _componentViewClasses;
+   std::unordered_map<std::string, bool> _registrationStatusMap;
+@@ -115,14 +130,19 @@ static Class<RCTComponentViewProtocol> RCTComponentViewClassWithName(const char
+ 
+ - (BOOL)_wasComponentRegistered:(const std::string &)name
+ {
++  std::shared_lock lock(_mutex);
+   auto registrationResult = _registrationStatusMap.find(name);
+   return registrationResult != _registrationStatusMap.end() && (registrationResult->second);
+ }
+ 
+ - (void)_registerComponentIfPossible:(const std::string &)name
+ {
+-  if (_registrationStatusMap.find(name) != _registrationStatusMap.end()) {
+-    return;
++  {
++    std::shared_lock lock(_mutex);
++    auto registration = _registrationStatusMap.find(name);
++    if (registration != _registrationStatusMap.end() && registration->second) {
++      return;
++    }
+   }
+ 
+   // Paper name: we prepare this variables to warn the user
+@@ -160,10 +180,14 @@ static Class<RCTComponentViewProtocol> RCTComponentViewClassWithName(const char
+     auto provider = ComponentDescriptorProvider{
+         .handle = componentHandle, .name = componentName, .flavor = flavor, .constructor = constructor};
+ 
++    std::unique_lock lock(_mutex);
++    if (_registrationStatusMap.find(name) != _registrationStatusMap.end()) {
++      return;
++    }
+     _providerRegistry.add(provider);
+     _componentViewClasses[componentHandle] =
+         [self _componentViewClassDescriptorFromClass:[RCTLegacyViewManagerInteropComponentView class]];
+-    _registrationStatusMap.insert({provider.name, true});
++    _registrationStatusMap.insert_or_assign(provider.name, true);
+     return;
+   }
+ 
+@@ -175,6 +199,10 @@ static Class<RCTComponentViewProtocol> RCTComponentViewClassWithName(const char
+   auto provider = ComponentDescriptorProvider{
+       .handle = componentHandle, .name = componentName, .flavor = flavor, .constructor = constructor};
+ 
++  std::unique_lock lock(_mutex);
++  if (_registrationStatusMap.find(name) != _registrationStatusMap.end()) {
++    return;
++  }
+   _providerRegistry.add(provider);
+   _componentViewClasses[componentHandle] =
+       [self _componentViewClassDescriptorFromClass:[RCTUnimplementedViewComponentView class]];
+@@ -189,27 +217,57 @@ static Class<RCTComponentViewProtocol> RCTComponentViewClassWithName(const char
+   auto provider = [componentViewClass componentDescriptorProvider];
+   _componentViewClasses[provider.handle] = [self _componentViewClassDescriptorFromClass:componentViewClass];
+   _providerRegistry.add(provider);
+-  _registrationStatusMap.insert({provider.name, true});
++  _registrationStatusMap.insert_or_assign(provider.name, true);
+ 
+   auto supplementalComponentDescriptorProviders = [componentViewClass supplementalComponentDescriptorProviders];
+   for (const auto &supplementalProvider : supplementalComponentDescriptorProviders) {
+     _providerRegistry.add(supplementalProvider);
+-    _registrationStatusMap.insert({supplementalProvider.name, true});
++    _registrationStatusMap.insert_or_assign(supplementalProvider.name, true);
+   }
+ }
+ 
+ - (RCTComponentViewDescriptor)createComponentViewWithComponentHandle:(facebook::react::ComponentHandle)componentHandle
+ {
+   RCTAssertMainQueue();
+-  std::shared_lock lock(_mutex);
++  RCTComponentViewClassDescriptor componentViewClassDescriptor;
++  BOOL found = NO;
++  {
++    std::shared_lock lock(_mutex);
++    auto iterator = _componentViewClasses.find(componentHandle);
++    if (iterator != _componentViewClasses.end()) {
++      componentViewClassDescriptor = iterator->second;
++      found = YES;
++    }
++  }
++
++  if (!found) {
++    // Resolve a late provider by its actual descriptor handle, not by
++    // treating ComponentHandle as an unsafe C string. This also recovers
++    // providers discovered by Codegen after the component was first mounted.
++    for (Class<RCTComponentViewProtocol> candidate in
++         self.thirdPartyFabricComponentsProvider.thirdPartyFabricComponents.allValues) {
++      if (candidate != Nil && [candidate componentDescriptorProvider].handle == componentHandle) {
++        [self registerComponentViewClass:candidate];
++        break;
++      }
++    }
++    std::shared_lock lock(_mutex);
++    auto iterator = _componentViewClasses.find(componentHandle);
++    if (iterator != _componentViewClasses.end()) {
++      componentViewClassDescriptor = iterator->second;
++      found = YES;
++    }
++  }
+ 
+-  auto iterator = _componentViewClasses.find(componentHandle);
+-  RCTAssert(
+-      iterator != _componentViewClasses.end(),
+-      @"ComponentView with componentHandle `%lli` (`%s`) not found.",
+-      componentHandle,
+-      (char *)componentHandle);
+-  auto componentViewClassDescriptor = iterator->second;
++  if (!found) {
++    // The old Release assert dereferenced end(); the first attempted fix used
++    // RCTUnimplementedViewComponentView, whose incompatible updateProps caused
++    // all four subsequent iOS 15.5 crashes. Never make either assumption.
++    RCTLogWarn(@"Fabric component handle %p has no registered view class; mounting a safe placeholder.",
++               (void *)componentHandle);
++    componentViewClassDescriptor =
++        [self _componentViewClassDescriptorFromClass:[RCTMissingComponentView class]];
++  }
+   Class viewClass = componentViewClassDescriptor.viewClass;
+ 
+   return RCTComponentViewDescriptor{

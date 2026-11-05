@@ -3,20 +3,58 @@ import ExpoUI
 import SwiftUI
 import UIKit
 
-/// The embedded UIKit stack owns the detail toolbar; the split owns the sidebar.
-private struct EmbeddedNavigationBarModifier: ViewModifier {
-  func body(content: Content) -> some View {
-    content.toolbar(.hidden, for: .navigationBar)
-  }
-}
-
 public class NativeLayoutModule: Module {
   public func definition() -> ModuleDefinition {
     Name("NativeLayout")
 
     OnCreate {
-      ViewModifierRegistry.register("nekofinEmbeddedNavigationBar") { _, _, _ in
-        EmbeddedNavigationBarModifier()
+      // Expo UI SDK 55 lacks the scrollPosition binding present in the
+      // upstream SDK 57 episode panel. Keep native SwiftUI List scrolling.
+      ViewModifierRegistry.register("nekofinEpisodeRowID") { params, _, _ in
+        EpisodeRowIDModifier(id: params["id"] as? String ?? "")
+      }
+      ViewModifierRegistry.register("nekofinEpisodeScrollTo") { params, _, _ in
+        EpisodeScrollToModifier(targetID: params["targetID"] as? String ?? "")
+      }
+      ViewModifierRegistry.register("nekofinEpisodeListStyle") { _, _, _ in
+        NekofinEpisodeListStyleModifier()
+      }
+      ViewModifierRegistry.register("nekofinEpisodeListRow") { _, _, _ in
+        NekofinEpisodeListRowModifier()
+      }
+      ViewModifierRegistry.register("nekofinButtonBorderShape") { _, _, _ in
+        NekofinButtonBorderShapeModifier()
+      }
+      ViewModifierRegistry.register("nekofinMenuIndicator") { _, _, _ in
+        NekofinMenuIndicatorModifier()
+      }
+      ViewModifierRegistry.register("nekofinAccessibilityTraits") { params, _, _ in
+        NekofinAccessibilityTraitsModifier(traits: params["traits"] as? [String] ?? [])
+      }
+      ViewModifierRegistry.register("nekofinAccessibilityCombine") { _, _, _ in
+        NekofinAccessibilityCombineModifier()
+      }
+      ViewModifierRegistry.register("nekofinAccessibilityHidden") { _, _, _ in
+        NekofinAccessibilityHiddenModifier()
+      }
+      ViewModifierRegistry.register("nekofinFontTextStyle") { params, _, _ in
+        NekofinFontTextStyleModifier(
+          textStyle: params["textStyle"] as? String ?? "body",
+          weight: params["weight"] as? String
+        )
+      }
+      ViewModifierRegistry.register("nekofinPresentationBackground") { params, _, _ in
+        NekofinPresentationBackgroundModifier(color: params["color"] as? String ?? "#000000")
+      }
+      ViewModifierRegistry.register("nekofinPlayerNavigation") { params, appContext, eventDispatcher in
+        try NekofinPlayerNavigationModifier(
+          from: params,
+          appContext: appContext,
+          eventDispatcher: eventDispatcher
+        )
+      }
+      ViewModifierRegistry.register("nekofinScrollEdgeEffectStyle") { _, _, _ in
+        NekofinScrollEdgeEffectStyleModifier()
       }
     }
 

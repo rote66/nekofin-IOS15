@@ -1,0 +1,17 @@
+diff --git a/ios/LinkPreview/LinkPreviewNativeActionView.swift b/ios/LinkPreview/LinkPreviewNativeActionView.swift
+index 3884b7844b99484f705632100134a16547e0bf0f..476eb5aeda22a9d4982b0cdae4559d6690491424 100644
+--- a/ios/LinkPreview/LinkPreviewNativeActionView.swift
++++ b/ios/LinkPreview/LinkPreviewNativeActionView.swift
+@@ -137,8 +137,10 @@ class LinkPreviewNativeActionView: RouterViewWithLogger, LinkPreviewMenuUpdatabl
+     baseUiAction.attributes = attributes
+     baseUiAction.state = isOn == true ? .on : .off
+ 
+-    if let subtitle = subtitle {
+-      baseUiAction.subtitle = subtitle
++    if #available(iOS 16.0, *) {
++      if let subtitle = subtitle {
++        baseUiAction.subtitle = subtitle
++      }
+     }
+     if let label = discoverabilityLabel {
+       baseUiAction.discoverabilityTitle = label

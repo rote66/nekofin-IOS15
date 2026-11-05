@@ -6,7 +6,7 @@ Pod::Spec.new do |s|
   s.author         = ''
   s.homepage       = 'https://github.com/lonzzi/nekofin'
   s.platforms      = {
-    :ios => '16.4'
+    :ios => '15.1'
   }
   s.source         = { git: '' }
   s.static_framework = true

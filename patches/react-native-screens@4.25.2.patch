@@ -1,0 +1,1366 @@
+diff --git a/android/build.gradle b/android/build.gradle
+--- a/android/build.gradle
++++ b/android/build.gradle
+@@ -106,7 +106,22 @@
+ def REACT_NATIVE_VERSION = reactProperties.getProperty("VERSION_NAME")
+ def REACT_NATIVE_MINOR_VERSION = REACT_NATIVE_VERSION.startsWith("0.0.0-") ? 1000 : REACT_NATIVE_VERSION.split("\\.")[1].toInteger()
+
++// Keep the package-private BlurView bridge in a separate generated source root.
++// A flat patch source avoids Bun's nested new-file patch directory bug.
++def blurViewCompatSources = layout.buildDirectory.dir("generated/blurview-compat")
++def generateBlurViewCompat = tasks.register("generateBlurViewCompat", Sync) {
++    from file("../CroppedBlurTarget.java")
++    from file("../ScreenBlurTarget.java")
++    from file("../NavigationGlassView.kt")
++    from file("../NavigationTabScrubber.kt")
++    into blurViewCompatSources
++}
++tasks.named("preBuild").configure {
++    dependsOn(generateBlurViewCompat)
++}
++
+ android {
++    sourceSets.main.java.srcDir(blurViewCompatSources)
+     compileSdkVersion safeExtGet('compileSdkVersion', rnsDefaultCompileSdkVersion)
+     namespace "com.swmansion.rnscreens"
+
+@@ -209,5 +224,7 @@
+     implementation 'androidx.swiperefreshlayout:swiperefreshlayout:1.1.0'
+     implementation 'com.google.android.material:material:1.13.0'
+     implementation "androidx.core:core-ktx:1.17.0"
+ 
++    implementation 'com.github.Dimezis:BlurView:version-3.1.0'
++    implementation 'androidx.dynamicanimation:dynamicanimation:1.1.0'
+     constraints {
+diff --git a/android/src/main/java/com/swmansion/rnscreens/Screen.kt b/android/src/main/java/com/swmansion/rnscreens/Screen.kt
+--- a/android/src/main/java/com/swmansion/rnscreens/Screen.kt
++++ b/android/src/main/java/com/swmansion/rnscreens/Screen.kt
+@@ -2,6 +2,8 @@
+
+ import android.annotation.SuppressLint
+ import android.content.pm.ActivityInfo
++import android.graphics.Canvas
++import eightbitlab.com.blurview.ScreenBlurTarget
+ import android.graphics.Paint
+ import android.os.Build
+ import android.os.Parcelable
+@@ -47,6 +49,22 @@
+ ) : FabricEnabledViewGroup(reactContext),
+     ScreenContentWrapper.OnLayoutCallback,
+     FragmentProviding {
++    private var bodyBlurTarget: ScreenBlurTarget? = null
++    val navigationBlurSource: ScreenBlurTarget
++        get() = bodyBlurTarget ?: ScreenBlurTarget(context, this).also {
++            bodyBlurTarget = it
++            invalidate()
++        }
++
++    override fun dispatchDraw(canvas: Canvas) {
++        val source = bodyBlurTarget
++        if (source != null && Build.VERSION.SDK_INT >= 31 && canvas.isHardwareAccelerated) {
++            source.drawBody(canvas) { super.dispatchDraw(it) }
++        } else {
++            super.dispatchDraw(canvas)
++        }
++    }
++
+     val fragment: Fragment?
+         get() = fragmentWrapper?.fragment
+
+diff --git a/ScreenBlurTarget.java b/ScreenBlurTarget.java
+new file mode 100644
+--- /dev/null
++++ b/ScreenBlurTarget.java
+@@ -0,0 +1,29 @@
++package eightbitlab.com.blurview;
++
++import android.annotation.SuppressLint;
++import android.content.Context;
++import android.graphics.Canvas;
++import android.graphics.RecordingCanvas;
++import android.os.Build;
++import android.os.IBinder;
++import android.view.View;
++import android.view.ViewTreeObserver;
++import androidx.annotation.RequiresApi;
++
++/** A body-only source; the native stack toolbar is outside the owning Screen. */
++@SuppressLint("ViewConstructor")
++public final class ScreenBlurTarget extends BlurTarget {
++    private final View owner;
++    public ScreenBlurTarget(Context context, View owner) { super(context); this.owner = owner; }
++    @Override public void getLocationOnScreen(int[] location) { owner.getLocationOnScreen(location); }
++    @Override public IBinder getWindowToken() { return owner.getWindowToken(); }
++    @Override public ViewTreeObserver getViewTreeObserver() { return owner.getViewTreeObserver(); }
++    public interface DrawChildren { void draw(Canvas canvas); }
++    @RequiresApi(Build.VERSION_CODES.S)
++    public void drawBody(Canvas destination, DrawChildren children) {
++        renderNode.setPosition(0, 0, owner.getWidth(), owner.getHeight());
++        RecordingCanvas recording = renderNode.beginRecording();
++        try { children.draw(recording); } finally { renderNode.endRecording(); }
++        destination.drawRenderNode(renderNode);
++    }
++}
+diff --git a/android/src/main/java/com/swmansion/rnscreens/gamma/tabs/appearance/TabsAppearanceApplicator.kt b/android/src/main/java/com/swmansion/rnscreens/gamma/tabs/appearance/TabsAppearanceApplicator.kt
+--- a/android/src/main/java/com/swmansion/rnscreens/gamma/tabs/appearance/TabsAppearanceApplicator.kt
++++ b/android/src/main/java/com/swmansion/rnscreens/gamma/tabs/appearance/TabsAppearanceApplicator.kt
+@@ -3,6 +3,7 @@
+ import android.annotation.SuppressLint
+ import android.content.Context
+ import android.content.res.ColorStateList
++import android.graphics.Color
+ import android.graphics.drawable.StateListDrawable
+ import android.util.TypedValue
+ import android.view.MenuItem
+@@ -16,6 +17,7 @@
+ import com.google.android.material.bottomnavigation.BottomNavigationView
+ import com.google.android.material.navigation.NavigationBarView
+ import com.swmansion.rnscreens.gamma.tabs.screen.TabsScreen
++import com.swmansion.rnscreens.gamma.tabs.container.CustomBottomNavigationView
+ import com.swmansion.rnscreens.utils.resolveColorAttr
+
+ @SuppressLint("PrivateResource") // We want to use variables from material design for default values
+@@ -40,6 +42,11 @@
+             tabBarAppearance?.tabBarBackgroundColor
+                 ?: resolveColorAttr(context, R.attr.colorSurfaceContainer),
+         )
++        // Opt in only for explicitly transparent tab bars; opaque bars keep Material defaults.
++        (bottomNavigationView as? CustomBottomNavigationView)?.container?.updateNavigationBackdrop(
++            hasFloatingBackground(tabBarAppearance),
++            resolveColorAttr(context, R.attr.colorSurface),
++        )
+
+         // Font color
+         // Defaults from spec: https://m3.material.io/components/navigation-bar/specs
+@@ -99,7 +106,8 @@
+         val rippleColor =
+             tabBarAppearance?.tabBarItemRippleColor
+                 ?: resolveColorAttr(context, R.attr.itemRippleColor)
+-        bottomNavigationView.itemRippleColor = ColorStateList.valueOf(rippleColor)
++        bottomNavigationView.itemRippleColor =
++            if (hasFloatingBackground(tabBarAppearance)) null else ColorStateList.valueOf(rippleColor)
+
+         // Active Indicator
+         val activeIndicatorColor =
+@@ -107,9 +115,16 @@
+                 ?: resolveColorAttr(context, R.attr.colorSecondaryContainer)
+
+         bottomNavigationView.isItemActiveIndicatorEnabled =
+-            tabBarAppearance?.tabBarItemActiveIndicatorEnabled ?: true
++            if (hasFloatingBackground(tabBarAppearance)) false else tabBarAppearance?.tabBarItemActiveIndicatorEnabled ?: true
+         bottomNavigationView.itemActiveIndicatorColor = ColorStateList.valueOf(activeIndicatorColor)
+-    }
++        (bottomNavigationView as? CustomBottomNavigationView)?.configureFloatingAppearance(
++            hasFloatingBackground(tabBarAppearance),
++            iconSelectedColor,
++        )
++    }
++
++    private fun hasFloatingBackground(appearance: TabsAppearance?): Boolean =
++        appearance?.tabBarBackgroundColor?.let { Color.alpha(it) == 0 } == true
+
+     fun updateFontStyles(
+         context: Context,
+diff --git a/android/src/main/java/com/swmansion/rnscreens/gamma/tabs/container/CustomBottomNavigationView.kt b/android/src/main/java/com/swmansion/rnscreens/gamma/tabs/container/CustomBottomNavigationView.kt
+--- a/android/src/main/java/com/swmansion/rnscreens/gamma/tabs/container/CustomBottomNavigationView.kt
++++ b/android/src/main/java/com/swmansion/rnscreens/gamma/tabs/container/CustomBottomNavigationView.kt
+@@ -1,8 +1,29 @@
+ package com.swmansion.rnscreens.gamma.tabs.container
+
++import android.animation.ValueAnimator
+ import android.annotation.SuppressLint
+ import android.content.Context
++import android.content.res.ColorStateList
++import android.graphics.Canvas
++import android.graphics.Color
++import android.graphics.Outline
++import android.graphics.Paint
++import android.graphics.RectF
++import android.os.Build
++import android.view.MotionEvent
++import android.view.View
++import android.view.ViewGroup
++import android.view.ViewOutlineProvider
++import android.view.animation.DecelerateInterpolator
++import android.widget.ImageView
++import android.widget.TextView
++import androidx.core.graphics.ColorUtils
++import androidx.core.view.children
++import androidx.dynamicanimation.animation.FloatPropertyCompat
++import androidx.dynamicanimation.animation.SpringAnimation
++import androidx.dynamicanimation.animation.SpringForce
+ import com.google.android.material.bottomnavigation.BottomNavigationView
++import kotlin.math.abs
+
+ @SuppressLint("ViewConstructor") // Should not be restored & should only be constructed by us.
+ class CustomBottomNavigationView(
+@@ -10,11 +31,377 @@
+     val container: TabsContainer,
+ ) : BottomNavigationView(context) {
+     private var actionOrigin: TabsActionOrigin? = null
+-
+-    internal fun setSelectedItemIdWithActionOrigin(
+-        itemId: Int,
+-        actionOrigin: TabsActionOrigin,
+-    ) {
++    private var floating = false
++    private val selectorPaint = Paint(Paint.ANTI_ALIAS_FLAG)
++    private val selectorBounds = RectF()
++    private val selectedFactors = mutableMapOf<Int, Float>()
++    private val visualColorCache = mutableMapOf<Int, Pair<Int, Int>>()
++    private val selectionAnimators = mutableMapOf<Int, ValueAnimator>()
++    private var visualSelectedId = View.NO_ID
++    private var selectedColor = Color.TRANSPARENT
++    private val scrubbing get() = scrubber.isScrubbing
++    private var customSelector = false
++    private var pressedIcon: View? = null
++    private val iconSprings = mutableMapOf<View, Pair<SpringAnimation, SpringAnimation>>()
++    private var dragCenter = 0f
++    private var dragOffset = 0f
++    private var barScale = 1f
++    private val originalMinimumHeight = minimumHeight
++    private val originalMenuMinimumHeight = getChildAt(0).minimumHeight
++    private val originalPadding = intArrayOf(paddingLeft, paddingTop, paddingRight, paddingBottom)
++    private val originalItemPadding = intArrayOf(itemPaddingTop, itemPaddingBottom)
++    // A uniform inset makes the inner and outer end caps concentric.
++    private val floatingContentInset
++        get() = dp(4)
++    private val menuView
++        get() = getChildAt(0) as ViewGroup
++    private fun items() =
++        menuView.children.filter { it.visibility == View.VISIBLE && it.isEnabled }.toList()
++    private fun center(item: View) = menuView.left + (item.left + item.right) / 2f
++    private fun nearest(x: Float) = items().minByOrNull { abs(center(it) - x) }
++    private fun animationsEnabled() =
++        Build.VERSION.SDK_INT < 26 || ValueAnimator.areAnimatorsEnabled()
++
++    private val centerSpring =
++        SpringAnimation(
++                this,
++                object : FloatPropertyCompat<CustomBottomNavigationView>("dragCenter") {
++                    override fun getValue(view: CustomBottomNavigationView) = view.dragCenter
++                    override fun setValue(view: CustomBottomNavigationView, value: Float) {
++                        view.dragCenter = value
++                        view.invalidate()
++                    }
++                }
++            )
++            .apply {
++                spring =
++                    SpringForce()
++                        .setStiffness(SpringForce.STIFFNESS_MEDIUM)
++                        .setDampingRatio(SpringForce.DAMPING_RATIO_LOW_BOUNCY)
++            }
++    private val offsetSpring =
++        SpringAnimation(
++                this,
++                object : FloatPropertyCompat<CustomBottomNavigationView>("dragOffset") {
++                    override fun getValue(view: CustomBottomNavigationView) = view.dragOffset
++                    override fun setValue(view: CustomBottomNavigationView, value: Float) {
++                        view.dragOffset = value
++                        view.invalidate()
++                    }
++                }
++            )
++            .apply {
++                spring =
++                    SpringForce()
++                        .setStiffness(SpringForce.STIFFNESS_MEDIUM)
++                        .setDampingRatio(SpringForce.DAMPING_RATIO_LOW_BOUNCY)
++            }
++    private val scaleSpring =
++        SpringAnimation(
++                this,
++                object : FloatPropertyCompat<CustomBottomNavigationView>("barScale") {
++                    override fun getValue(view: CustomBottomNavigationView) = view.barScale
++                    override fun setValue(view: CustomBottomNavigationView, value: Float) {
++                        view.barScale = value
++                        view.scaleX = value
++                        view.scaleY = value
++                        // Keep the glass surface attached to the scaled controls.
++                        view.container.setNavigationBackdropScale(value)
++                    }
++                }
++            )
++            .apply { spring = SpringForce().setStiffness(250f).setDampingRatio(0.7f) }
++
++    private val restoreSelector = Runnable {
++        customSelector = false
++        updateSelection(selectedItemId, false)
++        invalidate()
++    }
++    private val scrubber = NavigationTabScrubber(this, object : NavigationTabScrubber.Delegate {
++        override fun canStart(x: Float, y: Float) = items().isNotEmpty()
++        override fun onPressStarted(x: Float, y: Float) {
++            removeCallbacks(restoreSelector)
++            if (customSelector) {
++                centerSpring.cancel()
++                offsetSpring.cancel()
++                customSelector = false
++            }
++            pressedIcon = nearest(x)?.findViewById(com.google.android.material.R.id.navigation_bar_item_icon_view)
++            springIcon(pressedIcon, 0.9f)
++        }
++        override fun onPressReleased() {
++            springIcon(pressedIcon, 1f)
++            pressedIcon = null
++        }
++        override fun cancelChildTouch(event: MotionEvent) { cancelButtonTouch(event) }
++        override fun onScrubStarted(downX: Float, x: Float) {
++            customSelector = true
++            centerSpring.cancel()
++            offsetSpring.cancel()
++            val selected = items().firstOrNull { it.id == selectedItemId }
++            dragCenter = clampToCenters(x)
++            dragOffset = (selected?.let(::center) ?: dragCenter) - dragCenter
++            if (animationsEnabled()) {
++                offsetSpring.animateToFinalPosition(0f)
++                scaleSpring.animateToFinalPosition(1.019f)
++            } else {
++                dragOffset = 0f
++            }
++            // Telegram commits the tab where the touch began, previews while dragging,
++            // then commits the final tab on release through the native menu action.
++            nearest(downX)?.takeIf { it.id != selectedItemId }?.performClick()
++            updateDrag(x)
++        }
++        override fun onScrubMoved(x: Float) { updateDrag(x) }
++        override fun onScrubFinished(commit: Boolean) { endScrubbing(commit) }
++    })
++
++    private fun cancelButtonTouch(event: MotionEvent) { super.dispatchTouchEvent(event) }
++
++    internal fun configureFloatingAppearance(enabled: Boolean, selectedColor: Int) {
++        this.selectedColor = selectedColor
++        visualColorCache.clear()
++        if (floating == enabled) {
++            invalidate()
++            return
++        }
++        floating = enabled
++        clipToOutline = enabled
++        outlineProvider = if (enabled) CapsuleOutlineProvider else ViewOutlineProvider.BACKGROUND
++        minimumHeight = if (enabled) 0 else originalMinimumHeight
++        getChildAt(0).minimumHeight = if (enabled) 0 else originalMenuMinimumHeight
++        setPadding(
++            if (enabled) floatingContentInset else originalPadding[0],
++            if (enabled) floatingContentInset else originalPadding[1],
++            if (enabled) floatingContentInset else originalPadding[2],
++            if (enabled) floatingContentInset else originalPadding[3]
++        )
++        itemPaddingTop = if (enabled) dp(4) else originalItemPadding[0]
++        itemPaddingBottom = if (enabled) dp(4) else originalItemPadding[1]
++        isItemHorizontalTranslationEnabled = !enabled
++        resetInteraction()
++        requestLayout()
++        requestApplyInsets()
++        invalidate()
++    }
++
++    override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
++        if (floating) {
++            // Material's inset listener restores its initial padding on every inset pass.
++            setPadding(
++                floatingContentInset,
++                floatingContentInset,
++                floatingContentInset,
++                floatingContentInset
++            )
++            getChildAt(0).minimumHeight = 0
++        }
++        super.onMeasure(widthMeasureSpec, heightMeasureSpec)
++    }
++
++    // Ordinary taps crossfade/scale two per-item pills; the moving pill is only for scrubbing.
++    private fun updateSelection(itemId: Int, animated: Boolean) {
++        if (visualSelectedId == itemId) return
++        val animate = animated && visualSelectedId != View.NO_ID && animationsEnabled()
++        visualSelectedId = itemId
++        items().forEach { item ->
++            selectionAnimators.remove(item.id)?.cancel()
++            val target = if (item.id == itemId) 1f else 0f
++            val start = selectedFactors[item.id] ?: 0f
++            if (!animate || start == target) {
++                selectedFactors[item.id] = target
++            } else {
++                selectionAnimators[item.id] =
++                    ValueAnimator.ofFloat(start, target).apply {
++                        duration = 320
++                        interpolator = DecelerateInterpolator()
++                        addUpdateListener {
++                            selectedFactors[item.id] = it.animatedValue as Float
++                            invalidate()
++                        }
++                        start()
++                    }
++            }
++        }
++        invalidate()
++    }
++
++    override fun dispatchDraw(canvas: Canvas) {
++        if (floating) {
++            if (!scrubbing) updateSelection(selectedItemId, true)
++            if (customSelector) {
++                val x = dragCenter + dragOffset
++                val visible = items().sortedBy(::center)
++                val left = visible.lastOrNull { center(it) <= x } ?: visible.firstOrNull()
++                val right = visible.firstOrNull { center(it) >= x } ?: visible.lastOrNull()
++                if (left != null && right != null) {
++                    val distance = center(right) - center(left)
++                    val progress =
++                        if (distance > 0f) ((x - center(left)) / distance).coerceIn(0f, 1f) else 0f
++                    drawSelector(canvas, x, left.width + (right.width - left.width) * progress, 1f)
++                }
++            } else {
++                items().forEach {
++                    drawSelector(
++                        canvas,
++                        center(it),
++                        it.width.toFloat(),
++                        selectedFactors[it.id] ?: 0f
++                    )
++                }
++            }
++            applyVisualColors()
++        }
++        super.dispatchDraw(canvas)
++    }
++
++    private fun drawSelector(canvas: Canvas, center: Float, width: Float, factor: Float) {
++        if (factor <= 0f) return
++        val halfWidth = width / 2f
++        selectorBounds.set(
++            center - halfWidth,
++            paddingTop.toFloat(),
++            center + halfWidth,
++            (height - paddingBottom).toFloat()
++        )
++        val scale = 0.6f + 0.4f * factor
++        selectorPaint.color =
++            ColorUtils.setAlphaComponent(
++                selectedColor,
++                (23 * (1f - (1f - factor) * (1f - factor))).toInt()
++            )
++        val save = canvas.save()
++        canvas.scale(scale, scale, center, selectorBounds.centerY())
++        val radius = CapsuleOutlineProvider.radius(selectorBounds.width(), selectorBounds.height())
++        canvas.drawRoundRect(selectorBounds, radius, radius, selectorPaint)
++        canvas.restoreToCount(save)
++    }
++
++    private fun applyVisualColors() {
++        val normalIcon = itemIconTintList?.defaultColor ?: selectedColor
++        val normalText = itemTextColor?.defaultColor ?: normalIcon
++        items().forEach { item ->
++            val factor = selectedFactors[item.id] ?: 0f
++            val colors =
++                ColorUtils.blendARGB(normalIcon, selectedColor, factor) to
++                    ColorUtils.blendARGB(normalText, selectedColor, factor)
++            // Changing a drawable tint invalidates it; skip settled colors to avoid an idle redraw
++            // loop.
++            if (visualColorCache[item.id] == colors) return@forEach
++            visualColorCache[item.id] = colors
++            item
++                .findViewById<ImageView>(
++                    com.google.android.material.R.id.navigation_bar_item_icon_view
++                )
++                ?.imageTintList = ColorStateList.valueOf(colors.first)
++            fun tintLabels(view: View) {
++                if (view is TextView) view.setTextColor(colors.second)
++                if (view is ViewGroup) view.children.forEach(::tintLabels)
++            }
++            tintLabels(item)
++        }
++    }
++
++    private fun clampToCenters(x: Float): Float {
++        val centers = items().map(::center)
++        return if (centers.isEmpty()) x else x.coerceIn(centers.min(), centers.max())
++    }
++
++    private fun updateDrag(x: Float) {
++        dragCenter = clampToCenters(x)
++        nearest(dragCenter)?.let { updateSelection(it.id, true) }
++        invalidate()
++    }
++
++    private fun endScrubbing(commit: Boolean) {
++        val target =
++            if (commit) nearest(dragCenter) else items().firstOrNull { it.id == selectedItemId }
++        if (commit && target != null && target.id != selectedItemId) target.performClick()
++        updateSelection(selectedItemId, true)
++        val x = target?.let(::center) ?: dragCenter
++        if (animationsEnabled()) {
++            centerSpring.animateToFinalPosition(x)
++            scaleSpring.animateToFinalPosition(1f)
++            postDelayed(restoreSelector, 450)
++        } else {
++            scaleSpring.cancel()
++            barScale = 1f
++            scaleX = 1f
++            scaleY = 1f
++            container.setNavigationBackdropScale(1f)
++            dragCenter = x
++            dragOffset = 0f
++            restoreSelector.run()
++        }
++    }
++
++    override fun dispatchTouchEvent(event: MotionEvent): Boolean {
++        if (!floating) return super.dispatchTouchEvent(event)
++        if (scrubber.onTouchEvent(event)) return true
++        return super.dispatchTouchEvent(event)
++    }
++
++    private fun springIcon(icon: View?, target: Float) {
++        if (icon == null) return
++        if (!animationsEnabled()) {
++            icon.scaleX = target
++            icon.scaleY = target
++            return
++        }
++        val springs =
++            iconSprings.getOrPut(icon) {
++                fun create(
++                    property: androidx.dynamicanimation.animation.DynamicAnimation.ViewProperty
++                ) =
++                    SpringAnimation(icon, property).apply {
++                        spring = SpringForce().setStiffness(500f).setDampingRatio(0.55f)
++                    }
++                create(SpringAnimation.SCALE_X) to create(SpringAnimation.SCALE_Y)
++            }
++        springs.first.animateToFinalPosition(target)
++        springs.second.animateToFinalPosition(target)
++    }
++
++    private fun resetInteraction() {
++        scrubber.reset()
++        customSelector = false
++        removeCallbacks(restoreSelector)
++        selectionAnimators.values.forEach { it.cancel() }
++        selectionAnimators.clear()
++        centerSpring.cancel()
++        offsetSpring.cancel()
++        scaleSpring.cancel()
++        iconSprings.forEach { (view, springs) ->
++            springs.first.cancel()
++            springs.second.cancel()
++            view.scaleX = 1f
++            view.scaleY = 1f
++        }
++        iconSprings.clear()
++        pressedIcon = null
++        barScale = 1f
++        scaleX = 1f
++        scaleY = 1f
++        container.setNavigationBackdropScale(1f)
++        visualColorCache.clear()
++        visualSelectedId = View.NO_ID
++        selectedFactors.clear()
++    }
++
++    override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
++        super.onSizeChanged(w, h, oldw, oldh)
++        scrubber.cancel()
++        invalidateOutline()
++    }
++
++    override fun onDetachedFromWindow() {
++        resetInteraction()
++        super.onDetachedFromWindow()
++    }
++
++    private fun dp(value: Int) = (value * resources.displayMetrics.density).toInt()
++
++    internal fun setSelectedItemIdWithActionOrigin(itemId: Int, actionOrigin: TabsActionOrigin) {
+         require(actionOrigin !== TabsActionOrigin.USER) {
+             "[RNScreens] User-triggered actions should be processed via regular setSelectedItemId callback"
+         }
+@@ -24,14 +411,24 @@
+     }
+
+     override fun setSelectedItemId(itemId: Int) {
+-        if (this.actionOrigin == null) {
+-            this.actionOrigin = TabsActionOrigin.USER
+-        }
+-
++        if (this.actionOrigin == null) this.actionOrigin = TabsActionOrigin.USER
+         val actionOrigin = checkNotNull(this.actionOrigin)
+         super.setSelectedItemId(itemId)
+         container.onAfterSetSelectedItemId(itemId, actionOrigin)
+-
+         this.actionOrigin = null
+     }
+ }
++
++internal object CapsuleOutlineProvider : ViewOutlineProvider() {
++    fun radius(width: Float, height: Float) = minOf(width, height) / 2f
++
++    override fun getOutline(view: View, outline: Outline) {
++        outline.setRoundRect(
++            0,
++            0,
++            view.width,
++            view.height,
++            radius(view.width.toFloat(), view.height.toFloat())
++        )
++    }
++}
+diff --git a/android/src/main/java/com/swmansion/rnscreens/gamma/tabs/container/TabsContainer.kt b/android/src/main/java/com/swmansion/rnscreens/gamma/tabs/container/TabsContainer.kt
+--- a/android/src/main/java/com/swmansion/rnscreens/gamma/tabs/container/TabsContainer.kt
++++ b/android/src/main/java/com/swmansion/rnscreens/gamma/tabs/container/TabsContainer.kt
+@@ -1,6 +1,8 @@
+ package com.swmansion.rnscreens.gamma.tabs.container
+
++import android.animation.ValueAnimator
+ import android.annotation.SuppressLint
+ import android.content.Context
+ import android.content.res.Configuration
++import android.os.Build
+ import android.view.Gravity
+@@ -13,4 +15,5 @@
+ import androidx.core.view.WindowInsetsCompat
+ import androidx.core.view.children
++import androidx.core.view.isVisible
+ import androidx.core.view.size
+ import androidx.fragment.app.FragmentManager
+@@ -34,4 +34,5 @@
+ import com.swmansion.rnscreens.safearea.SafeAreaProvider
+ import com.swmansion.rnscreens.safearea.SafeAreaView
+ import com.swmansion.rnscreens.utils.RNSLog
++import eightbitlab.com.blurview.BlurTarget
+ import kotlin.properties.Delegates
+@@ -145,8 +149,8 @@
+     internal var colorScheme: ColorScheme by colorSchemeCoordinator::colorScheme
+     internal var tabBarRespectsIMEInsets: Boolean = false
+
+-    private val contentView: FrameLayout =
+-        FrameLayout(context).apply {
++    private val contentView: BlurTarget =
++        BlurTarget(context).apply {
+             layoutParams =
+                 LayoutParams(
+                     LayoutParams.MATCH_PARENT,
+@@ -155,6 +159,33 @@
+             id = ViewIdGenerator.generateViewId()
+         }
+
++    /** Shared content-only source for phone and tablet navigation materials. */
++    val navigationBlurSource: BlurTarget get() = contentView
++
++    private val navigationBackdrop = NavigationGlassView(context, contentView).apply {
++        layoutParams = LayoutParams(LayoutParams.MATCH_PARENT, 0, Gravity.BOTTOM)
++        isVisible = false
++    }
++    private val defaultNavigationElevation = bottomNavigationView.elevation
++    private var floatingNavigation = false
++    private var navigationSystemInsets = Insets.NONE
++
++    internal fun setNavigationBackdropScale(scale: Float) {
++        navigationBackdrop.scaleX = scale
++        navigationBackdrop.scaleY = scale
++    }
++
++    internal fun updateNavigationBackdrop(enabled: Boolean, surfaceColor: Int) {
++        if (floatingNavigation != enabled) {
++            floatingNavigation = enabled
++            requestLayout()
++            requestApplyInsets()
++        }
++        navigationBackdrop.isVisible = enabled && !tabBarHidden
++        navigationBackdrop.setSurfaceColor(surfaceColor)
++        bottomNavigationView.elevation = if (enabled) 0f else defaultNavigationElevation
++    }
++
+     private val appearanceCoordinator =
+         TabsAppearanceCoordinator(bottomNavigationView, tabsModel)
+
+@@ -174,6 +205,7 @@
+
+     init {
+         addView(contentView)
++        addView(navigationBackdrop)
+         addView(bottomNavigationView)
+
+         bottomNavigationView.setOnItemSelectedListener(this::onMenuItemSelected)
+@@ -316,5 +316,6 @@
+     override fun onDetachedFromWindow() {
++        tabsModel.forEach { it.finishTabSlide() }
+         super.onDetachedFromWindow()
+         teardownFragmentManager()
+         colorSchemeCoordinator.teardown()
+     }
+@@ -325,6 +358,36 @@
+     override fun onConfigurationChanged(newConfig: Configuration?) {
+         super.onConfigurationChanged(newConfig)
+         colorSchemeCoordinator.onConfigurationChanged(newConfig)
++    }
++
++    override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
++        val params = bottomNavigationView.layoutParams as LayoutParams
++        if (floatingNavigation) {
++            val density = resources.displayMetrics.density
++            val availableWidth = MeasureSpec.getSize(widthMeasureSpec)
++            val sideInset = maxOf(navigationSystemInsets.left, navigationSystemInsets.right)
++            params.width = (availableWidth - 2 * sideInset - (48 * density).toInt()).coerceIn(0, (440 * density).toInt())
++            params.height = (maxOf(64f, 40f + 24f * resources.configuration.fontScale) * density).toInt()
++            params.gravity = Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL
++            params.bottomMargin = navigationSystemInsets.bottom + (8 * density).toInt()
++        } else {
++            params.width = LayoutParams.MATCH_PARENT
++            params.height = LayoutParams.WRAP_CONTENT
++            params.gravity = Gravity.BOTTOM
++            params.bottomMargin = 0
++        }
++        (navigationBackdrop.layoutParams as LayoutParams).apply {
++            width = params.width
++            height = params.height
++            gravity = params.gravity
++            bottomMargin = params.bottomMargin
++        }
++        super.onMeasure(widthMeasureSpec, heightMeasureSpec)
++    }
++
++    override fun onLayout(changed: Boolean, left: Int, top: Int, right: Int, bottom: Int) {
++        super.onLayout(changed, left, top, right, bottom)
++        updateInterfaceInsets()
+     }
+
+     override fun dispatchApplyWindowInsets(insets: WindowInsets?): WindowInsets? {
+@@ -337,6 +400,12 @@
+             return insets
+         }
+
++        val systemInsets = WindowInsetsCompat.toWindowInsetsCompat(insets, this)
++            .getInsets(WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout())
++        if (navigationSystemInsets != systemInsets) {
++            navigationSystemInsets = systemInsets
++            requestLayout()
++        }
+         for (child in children) {
+             if (child === bottomNavigationView) {
+                 val insetsForBottomNavigationView = getInsetsForBottomNavigationView(insets)
+@@ -386,7 +455,7 @@
+         }
+     }
+
+-    override fun getInterfaceInsets(): EdgeInsets = EdgeInsets(0.0f, 0.0f, 0.0f, bottomNavigationView.height.toFloat())
++    override fun getInterfaceInsets(): EdgeInsets = EdgeInsets(0.0f, 0.0f, 0.0f, navigationOccupiedHeight().toFloat())
+
+     override fun getResolvedUiNightMode() = colorSchemeCoordinator.getResolvedUiNightMode()
+
+@@ -559,6 +559,18 @@
+         if (nextSelectedFragment === currentSelectedFragment) {
+             progressNavigationState(navState.selectedScreenKey, actionOrigin)
+             return true
+         }
+ 
++        // Complete any interrupted transition before starting another native swap.
++        // FragmentManager keeps the outgoing view drawing until its animator finishes.
++        tabsModel.forEach { it.finishTabSlide() }
++        val animationsEnabled = Build.VERSION.SDK_INT < 26 || ValueAnimator.areAnimatorsEnabled()
++        if (floatingNavigation && animationsEnabled && contentView.width > 0) {
++            val forward = tabsModel.indexOf(nextSelectedFragment) > tabsModel.indexOf(currentSelectedFragment)
++            val rtl = layoutDirection == View.LAYOUT_DIRECTION_RTL
++            val direction = if (forward != rtl) 1f else -1f
++            val distance = contentView.width.toFloat()
++            currentSelectedFragment.prepareTabSlide(direction, distance)
++            nextSelectedFragment.prepareTabSlide(direction, distance)
++        }
+         progressNavigationState(nextSelectedFragment.requireScreenKey, actionOrigin)
+@@ -745,25 +826,25 @@
+         }
+
+     private fun updateInterfaceInsets(newHeight: Int? = null) {
+-        val height = if (tabBarHidden) 0 else (newHeight ?: bottomNavigationView.height)
++        val height = navigationOccupiedHeight(newHeight)
+
+         interfaceInsetsChangeListener?.apply {
+             this.onInterfaceInsetsChange(EdgeInsets(0.0f, 0.0f, 0.0f, height.toFloat()))
+         }
+     }
+
++    private fun navigationOccupiedHeight(height: Int? = null): Int =
++        if (tabBarHidden) 0 else (height ?: bottomNavigationView.height) +
++            (bottomNavigationView.layoutParams as LayoutParams).bottomMargin
++
+     private fun getInsetsForBottomNavigationView(insets: WindowInsets): WindowInsets? {
+-        if (tabBarRespectsIMEInsets) {
+-            return insets
+-        }
+-
+-        val compatInsets = WindowInsetsCompat.toWindowInsetsCompat(insets, this)
+-
+-        return WindowInsetsCompat
+-            .Builder(compatInsets)
+-            .setInsets(WindowInsetsCompat.Type.ime(), Insets.NONE)
+-            .build()
+-            .toWindowInsets()
++        val builder = WindowInsetsCompat.Builder(WindowInsetsCompat.toWindowInsetsCompat(insets, this))
++        if (!tabBarRespectsIMEInsets) builder.setInsets(WindowInsetsCompat.Type.ime(), Insets.NONE)
++        // The capsule sits above the system bar. Material must not add that inset again.
++        if (floatingNavigation) {
++            builder.setInsets(WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout(), Insets.NONE)
++        }
++        return builder.build().toWindowInsets()
+     }
+
+     private fun isNavigationStateStale(request: TabsNavigationStateUpdateRequest): Boolean {
+diff --git a/android/src/main/java/com/swmansion/rnscreens/gamma/tabs/screen/TabsScreenFragment.kt b/android/src/main/java/com/swmansion/rnscreens/gamma/tabs/screen/TabsScreenFragment.kt
+--- a/android/src/main/java/com/swmansion/rnscreens/gamma/tabs/screen/TabsScreenFragment.kt
++++ b/android/src/main/java/com/swmansion/rnscreens/gamma/tabs/screen/TabsScreenFragment.kt
+@@ -1,10 +1,14 @@
+ package com.swmansion.rnscreens.gamma.tabs.screen
+
++import android.animation.Animator
++import android.animation.AnimatorListenerAdapter
++import android.animation.ObjectAnimator
+ import android.content.res.Configuration
+ import android.os.Bundle
+ import android.view.LayoutInflater
+ import android.view.View
+ import android.view.ViewGroup
++import android.view.animation.PathInterpolator
+ import androidx.fragment.app.Fragment
+
+ class TabsScreenFragment(
+@@ -12,6 +16,51 @@
+ ) : Fragment() {
+     internal val requireScreenKey: String by tabsScreen::requireScreenKey
+     internal val isPreventNativeSelectionEnabled: Boolean by tabsScreen::preventNativeSelection
++
++    private var tabSlideDirection = 0f
++    private var tabSlideDistance = 0f
++    private var tabSlideAnimator: Animator? = null
++
++    internal fun prepareTabSlide(direction: Float, distance: Float) {
++        tabSlideDirection = direction
++        tabSlideDistance = distance
++    }
++
++    internal fun finishTabSlide() {
++        tabSlideAnimator?.end()
++        tabSlideAnimator = null
++        tabSlideDirection = 0f
++        tabsScreen.translationX = 0f
++    }
++
++    override fun onCreateAnimator(transit: Int, enter: Boolean, nextAnim: Int): Animator? {
++        val direction = tabSlideDirection
++        val distance = tabSlideDistance
++        tabSlideDirection = 0f
++        if (direction == 0f || distance <= 0f) return super.onCreateAnimator(transit, enter, nextAnim)
++
++        val start = if (enter) direction * distance else 0f
++        val end = if (enter) 0f else -direction * distance
++        tabsScreen.translationX = start
++        return ObjectAnimator.ofFloat(tabsScreen, View.TRANSLATION_X, start, end).apply {
++            duration = 260
++            interpolator = PathInterpolator(0.2f, 0f, 0f, 1f)
++            addListener(object : AnimatorListenerAdapter() {
++                override fun onAnimationEnd(animation: Animator) {
++                    if (tabSlideAnimator === animation) {
++                        tabSlideAnimator = null
++                        tabsScreen.translationX = 0f
++                    }
++                }
++            })
++            tabSlideAnimator = this
++        }
++    }
++
++    override fun onDestroyView() {
++        finishTabSlide()
++        super.onDestroyView()
++    }
+
+     override fun onCreateView(
+         inflater: LayoutInflater,
+@@ -40,6 +89,7 @@
+     }
+
+     override fun onConfigurationChanged(newConfig: Configuration) {
++        finishTabSlide()
+         super.onConfigurationChanged(newConfig)
+
+         // Handle theme change through RN's Appearance.setColorScheme
+diff --git a/ios/helpers/image/RNSImageLoadingHelper.mm b/ios/helpers/image/RNSImageLoadingHelper.mm
+--- a/ios/helpers/image/RNSImageLoadingHelper.mm
++++ b/ios/helpers/image/RNSImageLoadingHelper.mm
+@@ -12,6 +12,37 @@
+
+   RCTImageSource *imageSource = [RCTConvert RCTImageSource:jsonImageSource];
+   RCTAssert(imageSource != nil, @"[RNScreens] Expected nonnil image source");
++
++  // These small, immutable PNGs are generated locally before the toolbar is configured.
++  // Resolve them before UIBarButtonItem is created, including when returning from a screen.
++  NSURL *imageURL = imageSource.request.URL;
++  if (imageURL.isFileURL &&
++      [imageURL.URLByDeletingLastPathComponent.lastPathComponent isEqualToString:@"toolbar-avatars"] &&
++      imageSource.size.width > 0 && imageSource.size.width == imageSource.size.height &&
++      imageSource.size.width <= 64) {
++    static NSCache<NSString *, UIImage *> *avatars;
++    static dispatch_once_t onceToken;
++    dispatch_once(&onceToken, ^{
++      avatars = [NSCache new];
++      avatars.countLimit = 32;
++    });
++    NSString *key = [imageURL.absoluteString stringByAppendingString:NSStringFromCGSize(imageSource.size)];
++    UIImage *image = [avatars objectForKey:key];
++    if (image == nil) {
++      UIImage *original = [UIImage imageWithContentsOfFile:imageURL.path];
++      if (original.CGImage != nil) {
++        CGFloat scale = CGImageGetWidth(original.CGImage) / imageSource.size.width;
++        // Compensate for UIKit's horizontal image padding without shrinking the visible circle.
++        image = [[UIImage imageWithCGImage:original.CGImage scale:scale orientation:original.imageOrientation]
++            imageWithAlignmentRectInsets:UIEdgeInsetsMake(0, 2, 0, 2)];
++        [avatars setObject:image forKey:key];
++      }
++    }
++    if (image != nil) {
++      imageLoadingCompletionBlock([RNSImageLoadingHelper handleRenderingModeForImage:image isTemplate:isTemplate]);
++      return;
++    }
++  }
+
+ #if !defined(NDEBUG) // We're in debug mode here
+   if (imageSource.packagerAsset) {
+diff --git a/CroppedBlurTarget.java b/CroppedBlurTarget.java
+new file mode 100644
+--- /dev/null
++++ b/CroppedBlurTarget.java
+@@ -0,0 +1,140 @@
++package eightbitlab.com.blurview;
++
++import android.annotation.SuppressLint;
++import android.content.Context;
++import android.graphics.Canvas;
++import android.graphics.RecordingCanvas;
++import android.graphics.RenderEffect;
++import android.graphics.Shader;
++import android.os.Build;
++import android.view.View;
++import android.view.ViewTreeObserver;
++import com.facebook.react.views.drawer.ReactDrawerLayout;
++
++import androidx.annotation.NonNull;
++import androidx.annotation.RequiresApi;
++
++/** A content-only, downsampled GPU snapshot shared by native navigation materials. */
++@SuppressLint("ViewConstructor")
++public final class CroppedBlurTarget extends BlurTarget {
++    private static final float SCALE = 4f;
++    private final BlurTarget source;
++    private final int[] sourceLocation = new int[2];
++    private final int[] targetLocation = new int[2];
++    private int previousSourceX = Integer.MIN_VALUE;
++    private int previousSourceY = Integer.MIN_VALUE;
++    private int previousTargetX = Integer.MIN_VALUE;
++    private int previousTargetY = Integer.MIN_VALUE;
++    private int previousClearColor;
++    private boolean hadContent;
++    private int snapshotWidth;
++    private int snapshotHeight;
++    private boolean snapshotDirty = true;
++    private ViewTreeObserver sourceObserver;
++    private final ViewTreeObserver.OnDrawListener sourceDraw = () -> {
++        snapshotDirty = true;
++        android.view.ViewParent parent = getParent();
++        if (parent instanceof View && ((View) parent).isShown()) {
++            ((View) parent).postInvalidateOnAnimation();
++        }
++    };
++
++    public CroppedBlurTarget(@NonNull Context context, @NonNull BlurTarget source) {
++        super(context);
++        this.source = source;
++    }
++
++    @Override
++    protected void onAttachedToWindow() {
++        super.onAttachedToWindow();
++        snapshotDirty = true;
++        // A popup has its own renderer and needs a frame when the source window draws.
++        // Same-window RenderNode references already update without extra invalidation.
++        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && getWindowToken() != source.getWindowToken()) {
++            sourceObserver = source.getViewTreeObserver();
++            sourceObserver.addOnDrawListener(sourceDraw);
++        }
++    }
++
++    @Override
++    protected void onDetachedFromWindow() {
++        if (sourceObserver != null && sourceObserver.isAlive()) {
++            sourceObserver.removeOnDrawListener(sourceDraw);
++        }
++        sourceObserver = null;
++        super.onDetachedFromWindow();
++    }
++
++    @RequiresApi(Build.VERSION_CODES.S)
++    public void updateBlurredSnapshot(int clearColor, boolean anchorDrawer) {
++        if (getWidth() <= 0 || getHeight() <= 0) return;
++        source.getLocationOnScreen(sourceLocation);
++        getLocationOnScreen(targetLocation);
++        // The drawer moves its cached material; sampling stays at the resting layout position.
++        if (anchorDrawer) {
++            android.view.ViewParent parent = getParent();
++            while (parent instanceof View) {
++                targetLocation[0] -= Math.round(((View) parent).getTranslationX());
++                targetLocation[1] -= Math.round(((View) parent).getTranslationY());
++                // Native left drawers change their laid-out left instead of translationX.
++                // Sample at the fully open position while DrawerLayout moves the cached material.
++                if (parent.getParent() instanceof ReactDrawerLayout) {
++                    targetLocation[0] -= ((View) parent).getLeft();
++                }
++                parent = parent.getParent();
++            }
++        }
++        int width = (int) Math.ceil(getWidth() / SCALE);
++        int height = (int) Math.ceil(getHeight() / SCALE);
++        boolean hasContent = source.renderNode.hasDisplayList();
++        // This caches drawing commands, not pixels: the child RenderNode remains live.
++        if (!snapshotDirty && renderNode.hasDisplayList() && snapshotWidth == width && snapshotHeight == height
++                && previousSourceX == sourceLocation[0] && previousSourceY == sourceLocation[1]
++                && previousTargetX == targetLocation[0] && previousTargetY == targetLocation[1]
++                && previousClearColor == clearColor && hadContent == hasContent) return;
++        previousSourceX = sourceLocation[0];
++        previousSourceY = sourceLocation[1];
++        previousTargetX = targetLocation[0];
++        previousTargetY = targetLocation[1];
++        previousClearColor = clearColor;
++        hadContent = hasContent;
++        snapshotDirty = false;
++        if (snapshotWidth != width || snapshotHeight != height) {
++            snapshotWidth = width;
++            snapshotHeight = height;
++            renderNode.setPosition(0, 0, width, height);
++            renderNode.setRenderEffect(RenderEffect.createBlurEffect(20f, 20f, Shader.TileMode.CLAMP));
++        }
++        RecordingCanvas canvas = renderNode.beginRecording();
++        try {
++            canvas.drawColor(clearColor);
++            canvas.scale(1f / SCALE, 1f / SCALE);
++            canvas.translate(sourceLocation[0] - targetLocation[0], sourceLocation[1] - targetLocation[1]);
++            if (source.renderNode.hasDisplayList()) canvas.drawRenderNode(source.renderNode);
++        } finally {
++            renderNode.endRecording();
++        }
++    }
++
++    @RequiresApi(Build.VERSION_CODES.S)
++    public void drawBlurredSnapshot(@NonNull Canvas canvas, @NonNull View destination) {
++        if (!renderNode.hasDisplayList()) return;
++        int saved = canvas.save();
++        canvas.translate(getLeft() - destination.getLeft(), getTop() - destination.getTop());
++        canvas.scale(SCALE, SCALE);
++        canvas.drawRenderNode(renderNode);
++        canvas.restoreToCount(saved);
++    }
++
++    @Override
++    protected void dispatchDraw(@NonNull Canvas canvas) {
++        if (!canvas.isHardwareAccelerated()) {
++            source.getLocationOnScreen(sourceLocation);
++            getLocationOnScreen(targetLocation);
++            int saved = canvas.save();
++            canvas.translate(sourceLocation[0] - targetLocation[0], sourceLocation[1] - targetLocation[1]);
++            source.draw(canvas);
++            canvas.restoreToCount(saved);
++        }
++    }
++}
+diff --git a/NavigationGlassView.kt b/NavigationGlassView.kt
+new file mode 100644
+--- /dev/null
++++ b/NavigationGlassView.kt
+@@ -0,0 +1,168 @@
++package com.swmansion.rnscreens.gamma.tabs.container
++
++import android.content.Context
++import android.graphics.Canvas
++import android.graphics.Color
++import android.graphics.Paint
++import android.graphics.Path
++import android.graphics.RectF
++import android.os.Build
++import android.view.View
++import android.view.ViewTreeObserver
++import android.graphics.Rect
++import android.widget.FrameLayout
++import androidx.core.graphics.ColorUtils
++import eightbitlab.com.blurview.BlurTarget
++import eightbitlab.com.blurview.CroppedBlurTarget
++
++/** One content-only GPU material shared by phone bottom tabs and tablet top controls. */
++class NavigationGlassView(context: Context, source: BlurTarget?) : FrameLayout(context) {
++    private val samplePadding = (3 * 20f * 4f + 16 * resources.displayMetrics.density).toInt()
++    private val sample = source?.let { CroppedBlurTarget(context, it) }?.apply {
++        visibility = View.INVISIBLE
++        importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
++    }
++    private val material = NavigationGlassBackdrop(context, sample)
++
++    init {
++        importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
++        isClickable = false
++        isFocusable = false
++        outlineProvider = CapsuleOutlineProvider
++        clipToOutline = true
++        sample?.let { addView(it, LayoutParams(0, 0)) }
++        addView(material, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
++    }
++
++    fun setDrawerShape(enabled: Boolean) {
++        clipToOutline = !enabled
++        material.setDrawerShape(enabled)
++    }
++
++    fun setCornerRadius(radius: Float) {
++        clipToOutline = false
++        material.setCornerRadius(radius)
++    }
++
++    fun setSurfaceColor(color: Int) = material.setSurfaceColor(color)
++
++    fun setTrailingSegment(width: Float, gap: Float) = material.setTrailingSegment(width, gap)
++
++    override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
++        (sample?.layoutParams as? LayoutParams)?.apply {
++            width = MeasureSpec.getSize(widthMeasureSpec) + samplePadding * 2
++            height = MeasureSpec.getSize(heightMeasureSpec) + samplePadding * 2
++            leftMargin = -samplePadding
++            topMargin = -samplePadding
++        }
++        super.onMeasure(widthMeasureSpec, heightMeasureSpec)
++    }
++}
++
++private class NavigationGlassBackdrop(context: Context, private val source: CroppedBlurTarget?) : View(context) {
++    private var clearColor = Color.WHITE
++    private val visibleBounds = Rect()
++    private val updateSnapshot = ViewTreeObserver.OnPreDrawListener {
++        if (Build.VERSION.SDK_INT >= 31 && isShown && getGlobalVisibleRect(visibleBounds)) {
++            source?.updateBlurredSnapshot(clearColor, drawer)
++        }
++        true
++    }
++    private val tintPaint = Paint()
++    private val shape = Path()
++    private val bounds = RectF()
++    private var drawer = false
++    private var cornerRadius = -1f
++    private var trailingWidth = 0f
++    private var trailingGap = 0f
++    private val strokePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
++        style = Paint.Style.STROKE
++        strokeWidth = resources.displayMetrics.density
++    }
++
++    init { setWillNotDraw(false); setSurfaceColor(Color.WHITE) }
++
++    override fun onAttachedToWindow() {
++        super.onAttachedToWindow()
++        if (source != null) viewTreeObserver.addOnPreDrawListener(updateSnapshot)
++    }
++
++    override fun onDetachedFromWindow() {
++        viewTreeObserver.removeOnPreDrawListener(updateSnapshot)
++        super.onDetachedFromWindow()
++    }
++
++    fun setSurfaceColor(color: Int) {
++        clearColor = color
++        val dark = ColorUtils.calculateLuminance(color) < 0.5
++        // Older Android versions retain the same shape with an opaque fallback.
++        tintPaint.color = ColorUtils.setAlphaComponent(color, if (Build.VERSION.SDK_INT >= 31) 185 else 245)
++        strokePaint.color = ColorUtils.setAlphaComponent(if (dark) Color.WHITE else Color.BLACK, if (dark) 22 else 14)
++        invalidate()
++    }
++
++    fun setCornerRadius(radius: Float) {
++        cornerRadius = radius
++        updateShape()
++        invalidate()
++    }
++
++    fun setDrawerShape(enabled: Boolean) {
++        drawer = enabled
++        updateShape()
++        invalidate()
++    }
++
++    fun setTrailingSegment(width: Float, gap: Float) {
++        trailingWidth = width
++        trailingGap = gap
++        updateShape()
++        invalidate()
++    }
++
++    override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
++        super.onSizeChanged(w, h, oldw, oldh)
++        updateShape()
++    }
++
++    private fun updateShape() {
++        shape.reset()
++        val radius = if (cornerRadius >= 0f) cornerRadius else height / 2f
++        if (drawer) {
++            val corner = 28 * resources.displayMetrics.density
++            bounds.set(0f, 0f, width.toFloat(), height.toFloat())
++            shape.addRoundRect(bounds, floatArrayOf(0f, 0f, corner, corner, corner, corner, 0f, 0f), Path.Direction.CW)
++        } else if (trailingWidth > 0f) {
++            bounds.set(0f, 0f, (width - trailingWidth - trailingGap).coerceAtLeast(0f), height.toFloat())
++            shape.addRoundRect(bounds, radius, radius, Path.Direction.CW)
++            bounds.set(width - trailingWidth, 0f, width.toFloat(), height.toFloat())
++            shape.addRoundRect(bounds, radius, radius, Path.Direction.CW)
++        } else {
++            bounds.set(0f, 0f, width.toFloat(), height.toFloat())
++            shape.addRoundRect(bounds, radius, radius, Path.Direction.CW)
++        }
++    }
++
++    override fun draw(canvas: Canvas) {
++        val saved = canvas.save()
++        canvas.clipPath(shape)
++        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
++            if (canvas.isHardwareAccelerated) {
++                source?.updateBlurredSnapshot(clearColor, drawer)
++                source?.drawBlurredSnapshot(canvas, this)
++            }
++        }
++        canvas.drawColor(tintPaint.color)
++        if (drawer || cornerRadius >= 0f) {
++            canvas.drawPath(shape, strokePaint)
++            canvas.restoreToCount(saved)
++            return
++        }
++        val halfStroke = strokePaint.strokeWidth / 2f
++        val radius = (height - strokePaint.strokeWidth) / 2f
++        val mainRight = if (trailingWidth > 0f) width - trailingWidth - trailingGap else width.toFloat()
++        canvas.drawRoundRect(halfStroke, halfStroke, mainRight - halfStroke, height - halfStroke, radius, radius, strokePaint)
++        if (trailingWidth > 0f) canvas.drawRoundRect(width - trailingWidth + halfStroke, halfStroke, width - halfStroke, height - halfStroke, radius, radius, strokePaint)
++        canvas.restoreToCount(saved)
++    }
++}
+diff --git a/NavigationTabScrubber.kt b/NavigationTabScrubber.kt
+new file mode 100644
+--- /dev/null
++++ b/NavigationTabScrubber.kt
+@@ -0,0 +1,90 @@
++package com.swmansion.rnscreens.gamma.tabs.container
++
++import android.view.MotionEvent
++import android.view.View
++import android.view.ViewConfiguration
++
++/** Shared native long-press/drag lifecycle for phone and tablet navigation. */
++class NavigationTabScrubber(private val host: View, private val delegate: Delegate) {
++    interface Delegate {
++        fun canStart(x: Float, y: Float): Boolean
++        fun onPressStarted(x: Float, y: Float)
++        fun onPressReleased()
++        fun cancelChildTouch(event: MotionEvent)
++        fun onScrubStarted(downX: Float, x: Float)
++        fun onScrubMoved(x: Float)
++        fun onScrubFinished(commit: Boolean)
++    }
++
++    var isScrubbing = false
++        private set
++    private var tracking = false
++    private var downX = 0f
++    private var x = 0f
++    private var y = 0f
++    private var downTime = 0L
++    private val startScrubbing = Runnable {
++        if (tracking && !isScrubbing) {
++            isScrubbing = true
++            host.parent?.requestDisallowInterceptTouchEvent(true)
++            val cancel = MotionEvent.obtain(downTime, android.os.SystemClock.uptimeMillis(), MotionEvent.ACTION_CANCEL, x, y, 0)
++            delegate.cancelChildTouch(cancel)
++            cancel.recycle()
++            delegate.onPressReleased()
++            delegate.onScrubStarted(downX, x)
++        }
++    }
++
++    /** Returns true only after taking over the native button's touch stream. */
++    fun onTouchEvent(event: MotionEvent): Boolean {
++        when (event.actionMasked) {
++            MotionEvent.ACTION_DOWN -> {
++                cancel()
++                if (!delegate.canStart(event.x, event.y)) return false
++                tracking = true
++                downX = event.x
++                x = event.x
++                y = event.y
++                downTime = event.downTime
++                delegate.onPressStarted(x, y)
++                host.postDelayed(startScrubbing, ViewConfiguration.getLongPressTimeout() * 3L / 4L)
++            }
++            MotionEvent.ACTION_MOVE -> {
++                if (!tracking) return false
++                x = event.x
++                y = event.y
++                if (isScrubbing) {
++                    delegate.onScrubMoved(x)
++                    return true
++                }
++            }
++            MotionEvent.ACTION_POINTER_DOWN, MotionEvent.ACTION_CANCEL -> return finish(false)
++            MotionEvent.ACTION_UP -> {
++                if (isScrubbing) delegate.onScrubMoved(event.x)
++                return finish(true)
++            }
++        }
++        return false
++    }
++
++    private fun finish(commit: Boolean): Boolean {
++        if (!tracking && !isScrubbing) return false
++        tracking = false
++        host.removeCallbacks(startScrubbing)
++        delegate.onPressReleased()
++        val consumed = isScrubbing
++        isScrubbing = false
++        if (consumed) delegate.onScrubFinished(commit)
++        return consumed
++    }
++
++    fun cancel() { finish(false) }
++
++    /** Detach/configuration cleanup, without starting a settling animation. */
++    fun reset() {
++        host.removeCallbacks(startScrubbing)
++        tracking = false
++        isScrubbing = false
++        delegate.onPressReleased()
++    }
++}
+diff --git a/ios/RNSScreenStack.mm b/ios/RNSScreenStack.mm
+--- a/ios/RNSScreenStack.mm
++++ b/ios/RNSScreenStack.mm
+@@ -64,6 +64,21 @@
+   [super viewDidLayoutSubviews];
+   if ([self.topViewController isKindOfClass:[RNSScreen class]]) {
+     RNSScreen *screenController = (RNSScreen *)self.topViewController;
++#if !TARGET_OS_TV
++    // iOS < 16.4 can restore UINavigationBar after a native-stack screen has
++    // already hidden it (notably while rotating an Expo Router /player route).
++    // Its invisible/visible 44pt bar steals touches from the player's HUD.
++    // Reinforce the existing React Navigation headerShown=false contract only
++    // when the active screen's own native header config explicitly says hidden.
++    if (@available(iOS 16.4, *)) {
++      // Preserve unmodified upstream native header behavior on supported iOS.
++    } else if (!self.navigationBarHidden) {
++      RNSScreenStackHeaderConfig *config = screenController.screenView.findHeaderConfig;
++      if (config != nil && !config.shouldHeaderBeVisible) {
++        [self setNavigationBarHidden:YES animated:NO];
++      }
++    }
++#endif
+     BOOL isNotDismissingModal = screenController.presentedViewController == nil ||
+         (screenController.presentedViewController != nil &&
+          ![screenController.presentedViewController isBeingDismissed]);

@@ -5,7 +5,7 @@ Pod::Spec.new do |s|
   s.description = 'Coordinates SwiftUI split navigation with embedded UIKit navigation stacks.'
   s.author = ''
   s.homepage = 'https://github.com/lonzzi/nekofin'
-  s.platforms = { :ios => '16.4' }
+  s.platforms = { :ios => '15.1' }
   s.source = { git: '' }
   s.static_framework = true
   s.dependency 'ExpoModulesCore'

@@ -1,6 +1,6 @@
 import { useAppNavigation } from '@/hooks/useAppNavigation';
 import { DanmakuSettingsProvider, defaultSettings } from '@/lib/contexts/DanmakuSettingsContext';
-import { NavigationBar } from 'expo-navigation-bar';
+import { setVisibilityAsync } from 'expo-navigation-bar';
 import { useRouter } from 'expo-router';
 import { useCallback, useEffect } from 'react';
 import { Platform } from 'react-native';
@@ -22,10 +22,10 @@ export function PlayerLabRoute() {
   }, [router, goToDestination]);
 
   useEffect(() => {
-    if (Platform.OS === 'android') NavigationBar.setHidden(true);
+    if (Platform.OS === 'android') void setVisibilityAsync('hidden');
 
     return () => {
-      if (Platform.OS === 'android') NavigationBar.setHidden(false);
+      if (Platform.OS === 'android') void setVisibilityAsync('visible');
     };
   }, []);
 

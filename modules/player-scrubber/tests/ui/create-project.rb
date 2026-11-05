@@ -4,8 +4,8 @@ require 'fileutils'
 output = ARGV.fetch(0)
 root = File.expand_path('../..', __dir__)
 project = Xcodeproj::Project.new(File.join(output, 'ScrubberTests.xcodeproj'))
-app = project.new_target(:application, 'ScrubberTestApp', :ios, '16.4')
-ui = project.new_target(:ui_test_bundle, 'ScrubberUITests', :ios, '16.4')
+app = project.new_target(:application, 'ScrubberTestApp', :ios, '15.1')
+ui = project.new_target(:ui_test_bundle, 'ScrubberUITests', :ios, '15.1')
 app.add_file_references([
   project.main_group.new_file(File.join(root, 'ios/MediaScrubberSlider.swift')),
   project.main_group.new_file(File.join(__dir__, 'ScrubberTestApp.swift'))

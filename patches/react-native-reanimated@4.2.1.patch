@@ -1,0 +1,37 @@
+diff --git a/src/PropsRegistryGarbageCollector.ts b/src/PropsRegistryGarbageCollector.ts
+--- a/src/PropsRegistryGarbageCollector.ts
++++ b/src/PropsRegistryGarbageCollector.ts
+@@ -13,28 +13,27 @@
+ export const PropsRegistryGarbageCollector = {
+-  viewsCount: 0,
+   viewsMap: new Map<number, IAnimatedComponentInternal>(),
+   intervalId: null as NodeJS.Timeout | null,
+ 
+   registerView(viewTag: number, component: IAnimatedComponentInternal) {
+     if (this.viewsMap.has(viewTag)) {
+       // In case of nested AnimatedComponents (like <GestureDetector> with <Animated.View> inside),
+       // `registerView` method is called first for the inner component (e.g. <Animated.View>)
+       // and then second time for the outer component (e.g. <GestureDetector>).
+       // Both of these components have the same viewTag so the inner component will be overwritten
+       // with the outer one. That's why we need to skip the logic during any subsequent calls.
+       return;
+     }
+     this.viewsMap.set(viewTag, component);
+-    this.viewsCount++;
+-    if (this.viewsCount === 1) {
++    if (this.viewsMap.size === 1) {
+       this.registerInterval();
+     }
+   },
+ 
+   unregisterView(viewTag: number) {
+-    this.viewsMap.delete(viewTag);
+-    this.viewsCount--;
+-    if (this.viewsCount === 0) {
++    if (!this.viewsMap.delete(viewTag)) {
++      return;
++    }
++    if (this.viewsMap.size === 0) {
+       this.unregisterInterval();
+     }
+   },

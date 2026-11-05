@@ -139,8 +139,7 @@ export default ({ config: _config }: { config: ExpoConfig }): ExpoConfig => {
           ios: {
             buildReactNativeFromSource: true,
             reactNativeReleaseLevel: 'stable',
-            deploymentTarget: '16.4',
-            enableSceneSupport: true,
+            deploymentTarget: '15.1',
           },
           android: {
             reactNativeReleaseLevel: 'stable',
@@ -150,7 +149,6 @@ export default ({ config: _config }: { config: ExpoConfig }): ExpoConfig => {
         },
       ],
       'expo-font',
-      'expo-status-bar',
       ['expo-navigation-bar', { enforceContrast: false }],
       'expo-web-browser',
       [
@@ -166,7 +164,9 @@ export default ({ config: _config }: { config: ExpoConfig }): ExpoConfig => {
         './plugins/withIosImageAssets',
         ['./assets/icons/jellyfin-icon--color-on-light.png', './assets/icons/emby.svg'],
       ],
+      './plugins/withMpvIos15Compat',
       'expo-mpv',
+      './plugins/withIosSceneLifecycle',
     ],
     experiments: {
       typedRoutes: true,

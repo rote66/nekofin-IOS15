@@ -1,0 +1,52 @@
+diff --git a/ExpoMpv.podspec b/ExpoMpv.podspec
+index b74955580d1a32a727d28d80606a2aab582da63b..6d1aa0bc0c8c35a68c713e7fed02398f7aa40cbe 100644
+--- a/ExpoMpv.podspec
++++ b/ExpoMpv.podspec
+@@ -11,7 +11,7 @@ Pod::Spec.new do |s|
+   s.author         = package['author']
+   s.homepage       = package['homepage']
+   s.platforms      = {
+-    :ios => '16.0'
++    :ios => '15.1'
+   }
+   s.swift_version  = '5.9'
+   s.source         = { git: 'https://github.com/lonzzi/expo-mpv' }
+diff --git a/ios/ExpoMpvView.swift b/ios/ExpoMpvView.swift
+index 21ea68762d619ab72a7ea09a9d1067749e2960bd..d9c98a803cd2c74c9cbde60a19d0005b338f41be 100644
+--- a/ios/ExpoMpvView.swift
++++ b/ios/ExpoMpvView.swift
+@@ -585,7 +585,12 @@ class ExpoMpvView: ExpoView {
+   private func emitHdrStateChange(sigPeak: Double) {
+     let peak = sigPeak.isFinite ? sigPeak : 0
+     let isHdr = peak > 1.0
+-    let headroom = window?.screen.potentialEDRHeadroom ?? 1.0
++    let headroom: CGFloat
++    if #available(iOS 16.0, *) {
++      headroom = window?.screen.potentialEDRHeadroom ?? 1.0
++    } else {
++      headroom = 1.0
++    }
+     let hdrActive = isHdr && headroom > 1.0
+     let gamma = getString("video-params/gamma") ?? ""
+     onHdrStateChange([
+@@ -1377,6 +1382,7 @@ private class MetalLayer: CAMetalLayer {
+   }
+ 
+   // EDR/HDR content must be set on main thread
++  @available(iOS 16.0, *)
+   override var wantsExtendedDynamicRangeContent: Bool {
+     get { super.wantsExtendedDynamicRangeContent }
+     set {
+diff --git a/package.json b/package.json
+index cf7481e099bddd421b1ee748b81dd9d90fd9f23b..31aada49b9d22fd6da78e510c0600ba0106ff0e6 100644
+--- a/package.json
++++ b/package.json
+@@ -60,7 +60,7 @@
+   },
+   "peerDependencies": {
+     "expo": "*",
+-    "react": "19.2.3",
++    "react": ">=19.2.0 <20.0.0",
+     "react-native": "*"
+   },
+   "expo": {

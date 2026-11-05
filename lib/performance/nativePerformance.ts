@@ -1,3 +1,5 @@
+import { Platform } from 'react-native';
+
 type PerformanceToolkitModule = typeof import('react-native-performance-toolkit');
 
 export type NativePerformanceSnapshot = {
@@ -22,6 +24,20 @@ function getErrorMessage(error: unknown) {
 function loadToolkit() {
   if (cachedToolkit) return cachedToolkit;
   if (toolkitUnavailable) return null;
+
+  // NitroModules 0.36.1's Swift/C++ exception_ptr bridge imports
+  // __from_native_exception_pointer from libc++. That symbol is absent on
+  // iOS 15.x and causes dyld to abort before the app reaches React Native.
+  // react-native.config.js excludes the native Nitro module from the *whole*
+  // iOS binary because its symbol is unavailable on iOS 15.1. A JS OS check
+  // cannot restore native metrics on 16.4+ without a different binary/linker
+  // strategy; do not require an unlinked native module on supported iOS.
+  if (Platform.OS === 'ios') {
+    toolkitUnavailable = true;
+    lastLoadError =
+      'Native CPU, memory and UI FPS metrics are disabled in the iOS 15.1-compatible binary.';
+    return null;
+  }
 
   try {
     // eslint-disable-next-line @typescript-eslint/no-require-imports

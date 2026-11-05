@@ -31,6 +31,12 @@ describe('app config smoke', () => {
     expect(pluginNames).toContain('expo-build-properties');
     expect(pluginNames).toContain('react-native-video');
     expect(pluginNames).toContain('expo-mpv');
+    expect(pluginNames).toContain('./plugins/withMpvIos15Compat');
+    // Expo dangerous mods execute inside-out; the earlier registered mod
+    // runs after expo-mpv has downloaded and postprocessed its archives.
+    expect(pluginNames.indexOf('./plugins/withMpvIos15Compat')).toBeLessThan(
+      pluginNames.indexOf('expo-mpv'),
+    );
   });
 
   it('can resolve the custom expo-mpv module used by native builds', async () => {
@@ -42,14 +48,16 @@ describe('app config smoke', () => {
   });
 
   it('enables the scene lifecycle required by iOS 27 SDK builds', () => {
-    const buildProperties = getConfig().plugins?.find(
+    const plugins = getConfig().plugins ?? [];
+    const buildProperties = plugins.find(
       (plugin) => Array.isArray(plugin) && plugin[0] === 'expo-build-properties',
     );
 
+    expect(plugins).toContain('./plugins/withIosSceneLifecycle');
     expect(buildProperties).toEqual([
       'expo-build-properties',
       expect.objectContaining({
-        ios: expect.objectContaining({ enableSceneSupport: true }),
+        ios: expect.objectContaining({ deploymentTarget: '15.1' }),
       }),
     ]);
   });
