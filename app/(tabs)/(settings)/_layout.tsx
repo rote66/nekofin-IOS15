@@ -1,8 +1,5 @@
 import { useNativeListStackOptions } from '@/components/navigation/nativeListStackOptions';
-import {
-  nativeStackTransitionProps,
-  useNativeStackScreenListeners,
-} from '@/components/navigation/useNativeStackScreenListeners';
+import { useNativeStackScreenListeners } from '@/components/navigation/useNativeStackScreenListeners';
 import { useTranslation } from '@/lib/i18n';
 import { useAppTheme } from '@/lib/theme';
 import { withOuterTheme } from '@/lib/theme/OuterTheme';
@@ -17,7 +14,6 @@ function HomeLayout() {
   const stackOptions = useNativeListStackOptions(backgroundColor);
   return (
     <Stack
-      unstable_nativeProps={nativeStackTransitionProps('settings')}
       initialRouteName="index"
       screenListeners={stackScreenListeners}
       screenOptions={{

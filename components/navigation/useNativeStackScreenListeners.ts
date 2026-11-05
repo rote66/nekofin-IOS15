@@ -6,7 +6,7 @@ import {
 import { usePerformanceStackScreenListeners } from '@/lib/performance/PerformanceMonitorContext';
 import { useCallback } from 'react';
 
-export function useNativeStackScreenListeners(scope: string) {
+export function useNativeStackScreenListeners(scope: string, onTransitionFinish?: () => void) {
   const performanceListeners = usePerformanceStackScreenListeners(scope);
   return useCallback(
     (props: Parameters<typeof performanceListeners>[0] & { route: { key?: string } }) => {
@@ -20,21 +20,19 @@ export function useNativeStackScreenListeners(scope: string) {
         transitionEnd(event: Parameters<typeof listeners.transitionEnd>[0]) {
           finishNavigationTransition(key);
           listeners.transitionEnd(event);
+          if (!event.data.closing) {
+            finishNavigationScope(scope);
+            onTransitionFinish?.();
+          }
         },
         gestureCancel() {
           finishNavigationTransition(key);
+          finishNavigationScope(scope);
           listeners.gestureCancel();
+          onTransitionFinish?.();
         },
       };
     },
-    [performanceListeners, scope],
+    [onTransitionFinish, performanceListeners, scope],
   );
-}
-
-const nativeProps = new Map<string, { onFinishTransitioning: () => void }>();
-export function nativeStackTransitionProps(scope: string) {
-  if (!nativeProps.has(scope)) {
-    nativeProps.set(scope, { onFinishTransitioning: () => finishNavigationScope(scope) });
-  }
-  return nativeProps.get(scope)!;
 }

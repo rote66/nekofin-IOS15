@@ -1,4 +1,5 @@
 import { usesAndroidNavigationRail } from '@/lib/adaptiveLayout';
+import { isBelowUpstreamIOSMinimum } from '@/lib/compat/ios15';
 import { createContext, useContext, type PropsWithChildren } from 'react';
 import { Platform, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -15,7 +16,11 @@ export function FloatingTabBarInsetProvider({ children }: PropsWithChildren) {
       ? usesAndroidNavigationRail(width, height)
         ? insets.bottom
         : insets.bottom + Math.max(64, 40 + 24 * fontScale) + 16
-      : 0;
+      : Platform.OS === 'ios' &&
+          !Platform.isPad &&
+          isBelowUpstreamIOSMinimum(Platform.OS, Platform.Version)
+        ? insets.bottom + 94
+        : 0;
 
   return (
     <FloatingTabBarInsetContext.Provider value={bottomInset}>

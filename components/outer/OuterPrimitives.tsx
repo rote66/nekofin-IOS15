@@ -146,12 +146,12 @@ export function OuterTitle({ children, large = true }: { children: string; large
     );
   }
   return (
-    <Stack.Title
+    <Stack.Screen.Title
       large={large && !(Platform.OS === 'ios' && Platform.isPad)}
       style={{ color: theme.colors.text }}
       largeStyle={{ color: theme.colors.text }}
     >
       {children}
-    </Stack.Title>
+    </Stack.Screen.Title>
   );
 }

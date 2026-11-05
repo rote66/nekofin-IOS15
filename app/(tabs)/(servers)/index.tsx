@@ -15,6 +15,7 @@ import { ServerTypePicker } from '@/components/servers/ServerTypePicker';
 import { useTracedRouter } from '@/hooks/performance/useTracedRouter';
 import { useAppNavigation } from '@/hooks/useAppNavigation';
 import { useContentDimensions } from '@/hooks/useContentDimensions';
+import { isBelowUpstreamIOSMinimum } from '@/lib/compat/ios15';
 import { useMediaServers } from '@/lib/contexts/MediaServerContext';
 import { useTranslation } from '@/lib/i18n';
 import { MEDIA_SERVER_TYPE_OPTIONS } from '@/lib/mediaServerTypes';
@@ -22,7 +23,7 @@ import { groupServerAccounts } from '@/lib/serverAccounts';
 import { useAppTheme } from '@/lib/theme';
 import { withOuterTheme } from '@/lib/theme/OuterTheme';
 import type { MediaServerInfo, MediaServerType } from '@/services/media/types';
-import { useIsFocused } from 'expo-router/react-navigation';
+import { useIsFocused } from '@react-navigation/native';
 import { ActivityIndicator, Alert, Platform, StyleSheet, Text, View } from 'react-native';
 
 function ServersScreen() {
@@ -36,9 +37,17 @@ function ServersScreen() {
   const isFocused = useIsFocused();
   const { width } = useContentDimensions();
   const availableWidth = Math.max(Math.min(width, 840) - theme.spacing.page * 2, 0);
+  // The one-column fallback addresses narrow iPhones only. Keep the existing
+  // iPad grid untouched while iPad navigation remains unvalidated.
+  const legacyServerCards =
+    Platform.OS === 'ios' &&
+    !Platform.isPad &&
+    isBelowUpstreamIOSMinimum(Platform.OS, Platform.Version);
   const columns = Math.max(
-    2,
-    Math.floor((availableWidth + theme.spacing.md) / (158 + theme.spacing.md)),
+    legacyServerCards ? 1 : 2,
+    Math.floor(
+      (availableWidth + theme.spacing.md) / ((legacyServerCards ? 240 : 158) + theme.spacing.md),
+    ),
   );
   const cardWidth = (availableWidth - (columns - 1) * theme.spacing.md) / columns;
   const androidCardStyle =

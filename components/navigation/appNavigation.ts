@@ -1,15 +1,16 @@
-import type { ImperativeRouter } from 'expo-router';
 import type {
   NavigationContainerRef,
   NavigationState,
   ParamListBase,
   PartialState,
-} from 'expo-router/react-navigation';
+} from '@react-navigation/native';
+import type { useRouter } from 'expo-router';
 
 import { navigationDestinations } from './navigationDestinations';
 
 type NestedState = NavigationState | PartialState<NavigationState>;
 type AppNavigation = Pick<NavigationContainerRef<ParamListBase>, 'getRootState' | 'dispatch'>;
+type AppRouter = Pick<ReturnType<typeof useRouter>, 'navigate' | 'dismissTo'>;
 
 function findAppTabs(state?: NestedState): NestedState | undefined {
   for (const route of state?.routes ?? []) {
@@ -30,7 +31,7 @@ function areAppTabsFocused(state?: NestedState): boolean {
 
 /** Shared by phone/tablet navigation, account menus and links to app roots. */
 export function navigateToAppDestination(
-  router: Pick<ImperativeRouter, 'navigate' | 'dismissTo'>,
+  router: AppRouter,
   key: string,
   navigation: AppNavigation,
 ) {

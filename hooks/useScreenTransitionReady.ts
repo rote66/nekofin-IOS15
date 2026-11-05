@@ -1,5 +1,6 @@
-import { useNavigation, type NativeStackNavigationProp } from 'expo-router';
-import { useIsFocused } from 'expo-router/react-navigation';
+import { useIsFocused } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { useNavigation } from 'expo-router';
 import { useEffect, useState } from 'react';
 
 /** Native stack transition completion has the same contract on iOS and Android. */

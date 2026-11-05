@@ -16,7 +16,7 @@ const state = vi.hoisted(() => ({
   setFinished: vi.fn(),
 }));
 vi.mock('expo-router', () => ({ useNavigation: () => state.navigation }));
-vi.mock('expo-router/react-navigation', () => ({ useIsFocused: () => state.focused }));
+vi.mock('@react-navigation/native', () => ({ useIsFocused: () => state.focused }));
 vi.mock('react', () => ({
   useState: (initial: boolean) => [(state.finished ??= initial), state.setFinished],
   useEffect: (effect: () => (() => void) | undefined, deps: readonly unknown[]) => {

@@ -1,3 +1,4 @@
+import { isBelowUpstreamIOSMinimum } from '@/lib/compat/ios15';
 import { useTranslation } from '@/lib/i18n';
 import { useAppTheme } from '@/lib/theme';
 import { isLiquidGlassAvailable } from 'expo-glass-effect';
@@ -18,13 +19,17 @@ export function useNativeListStackOptions(backgroundColor: string) {
   const { t: tr } = useTranslation();
   const theme = useAppTheme();
   const ios = Platform.OS === 'ios';
+  const legacyIOS = isBelowUpstreamIOSMinimum(Platform.OS, Platform.Version);
   const sidebar = useTabletSidebar();
   const chrome = useContext(TabletChromeContext);
   return {
     ...platformHeaderOptions,
     ...nativeStatusBarOptions(theme.isDark),
     orientation: Platform.OS === 'ios' ? (Platform.isPad ? 'all' : 'portrait_up') : undefined,
-    headerTransparent: ios,
+    // UIKit's "prominent" blur is brighter/darker than the semantic grouped
+    // page backgrounds on iOS 15. Give legacy nav bars the same opaque color
+    // as their content, instead of showing a contrasting blur band.
+    headerTransparent: ios && !legacyIOS,
     ...nativeListTitleOptions,
     headerShadowVisible: false,
     headerLargeTitleShadowVisible: false,
@@ -35,9 +40,10 @@ export function useNativeListStackOptions(backgroundColor: string) {
             createElement(TabletHeaderTitle, { tintColor }, children),
         }
       : {}),
-    ...(ios && sidebar?.isCollapsed
+    // Restore upstream's reopen-sidebar button on supported iPadOS. iOS < 16.4
+    // keeps its compatibility navigation-bar fallback untouched.
+    ...(ios && !legacyIOS && sidebar?.isCollapsed
       ? {
-          // Keep the native back button when a pushed screen also offers the sidebar.
           headerBackVisible: true,
           unstable_headerLeftItems: () => [
             {
@@ -50,12 +56,14 @@ export function useNativeListStackOptions(backgroundColor: string) {
           ],
         }
       : {}),
-    headerBlurEffect: ios && !isLiquidGlassAvailable() ? 'prominent' : 'none',
+    headerBlurEffect: ios && !legacyIOS && !isLiquidGlassAvailable() ? 'prominent' : 'none',
     // Android lays non-overlay headers outside the content background. A transparent
     // toolbar exposes the outgoing screen until its native transition finishes.
-    headerStyle: { backgroundColor: ios ? 'transparent' : backgroundColor },
+    headerStyle: { backgroundColor: ios && !legacyIOS ? 'transparent' : backgroundColor },
     // Keep the gradual blur: iOS 27 gives "automatic" a distinct, sharper material.
-    scrollEdgeEffects: { top: 'soft', bottom: 'automatic' },
+    ...(!legacyIOS
+      ? { scrollEdgeEffects: { top: 'soft' as const, bottom: 'automatic' as const } }
+      : {}),
     contentStyle: { backgroundColor },
   } as const;
 }

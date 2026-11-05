@@ -4,9 +4,9 @@ import { nativeStatusBarOptions } from '@/components/navigation/nativeStackConfi
 import ParallaxScrollView, {
   resolveParallaxHeaderOverscrollExtent,
 } from '@/components/ParallaxScrollView';
+import { useIsFocused } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Stack } from 'expo-router';
-import { useIsFocused } from 'expo-router/react-navigation';
 import {
   useCallback,
   useMemo,

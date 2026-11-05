@@ -11,7 +11,7 @@ import { DanmakuSourcesProvider } from '@/lib/contexts/DanmakuSourcesContext';
 import { MediaServerProvider } from '@/lib/contexts/MediaServerContext';
 import { ThemePreferenceProvider } from '@/lib/contexts/ThemePreferenceContext';
 import { LanguageProvider } from '@/lib/i18n/LanguageProvider';
-import { finishNavigationScope, yieldToNavigationIdle } from '@/lib/navigationWork';
+import { yieldToNavigationIdle } from '@/lib/navigationWork';
 import {
   PerformanceMonitorProvider,
   PerformanceRouteObserver,
@@ -34,10 +34,10 @@ import {
 import { storage } from '@/lib/storage';
 import { useAppTheme } from '@/lib/theme';
 import { pruneSubtitleCache } from '@/services/media/subtitleCache';
+import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
 import { createAsyncStoragePersister } from '@tanstack/query-async-storage-persister';
 import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client';
 import { Stack, usePathname } from 'expo-router';
-import { DarkTheme, DefaultTheme, ThemeProvider } from 'expo-router/react-navigation';
 import * as ScreenOrientation from 'expo-screen-orientation';
 import { useEffect, useLayoutEffect, useMemo, useRef } from 'react';
 import { AppState, Platform } from 'react-native';
@@ -100,7 +100,13 @@ function RootNavigation() {
   const tablet = useIsTablet();
   const pathname = usePathname();
   const [videoOrientation] = useMMKVString('videoOrientation', storage);
-  const stackScreenListeners = useNativeStackScreenListeners('root');
+  const stackScreenListeners = useNativeStackScreenListeners('root', () => {
+    if (!deferOrientationRestore.current) return;
+    deferOrientationRestore.current = false;
+    void ScreenOrientation.lockAsync(desiredOrientationLock.current).catch((error) =>
+      console.warn('Failed to restore the route orientation', error),
+    );
+  });
   const isPlayerRoute = pathname === '/player' || pathname.startsWith('/player/');
   const isPlayerLabRoute = PLAYER_LAB_AVAILABLE && pathname.startsWith('/player-lab');
   const orientationLock = isPlayerRoute
@@ -158,17 +164,6 @@ function RootNavigation() {
     <ThemeProvider value={navigationTheme}>
       <Stack
         screenListeners={stackScreenListeners}
-        unstable_nativeProps={{
-          // The popped route can lose its listeners before native completion.
-          onFinishTransitioning: () => {
-            finishNavigationScope('root');
-            if (!deferOrientationRestore.current) return;
-            deferOrientationRestore.current = false;
-            void ScreenOrientation.lockAsync(desiredOrientationLock.current).catch((error) =>
-              console.warn('Failed to restore the route orientation', error),
-            );
-          },
-        }}
         screenOptions={{
           ...platformHeaderOptions,
           ...nativeStatusBarOptions(appTheme.isDark),
@@ -178,6 +173,7 @@ function RootNavigation() {
           orientation: Platform.OS === 'ios' ? (Platform.isPad ? 'all' : 'portrait_up') : undefined,
         }}
       >
+        <Stack.Screen name="index" options={{ headerShown: false }} />
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen
           name="player"

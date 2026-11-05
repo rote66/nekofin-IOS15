@@ -22,9 +22,9 @@ import { createMediaAdapterWithApi, createMediaApiFromServerInfo } from '@/servi
 import { mediaQueryKeys } from '@/services/media/queryKeys';
 import type { MediaItem, MediaServerInfo } from '@/services/media/types';
 import { ImageType } from '@jellyfin/sdk/lib/generated-client/models';
+import { useIsFocused } from '@react-navigation/native';
 import { queryOptions } from '@tanstack/react-query';
 import { Stack, useFocusEffect } from 'expo-router';
-import { useIsFocused } from 'expo-router/react-navigation';
 import { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,

@@ -1,43 +1,23 @@
 import { useAppNavigation } from '@/hooks/useAppNavigation';
 import { ContentDimensionsProvider } from '@/hooks/useContentDimensions';
+import { usesCompactIPadSidebar } from '@/lib/compat/ios15';
 import { useTranslation } from '@/lib/i18n';
 import { useOuterTheme } from '@/lib/theme/OuterTheme';
-import { embeddedNavigationBar } from '@/modules/native-layout';
 import { NativeTabSidebar } from '@/modules/native-layout/NativeTabSidebar.ios';
-import {
-  Button,
-  Host,
-  HStack,
-  Image,
-  Label,
-  List,
-  NavigationLink,
-  NavigationSplitView,
-  RNHostView,
-  Section,
-  Spacer,
-  Text,
-  VStack,
-} from '@expo/ui/swift-ui';
-import {
-  background,
-  buttonStyle,
-  clipShape,
-  foregroundStyle,
-  frame,
-  ignoreSafeArea,
-  listStyle,
-  navigationBarTitleDisplayMode,
-  navigationSplitViewColumnWidth,
-  navigationSplitViewStyle,
-  navigationTitle,
-  resizable,
-  tag,
-} from '@expo/ui/swift-ui/modifiers';
+import { Ionicons } from '@expo/vector-icons';
+import { Image } from 'expo-image';
 import { useSegments } from 'expo-router';
-import { useCallback, useMemo, useState, type ComponentProps, type PropsWithChildren } from 'react';
-import { Platform } from 'react-native';
-import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { useCallback, useEffect, useMemo, useState, type PropsWithChildren } from 'react';
+import {
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  useWindowDimensions,
+  View,
+} from 'react-native';
+import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { tabletDestinationKey, tabletDestinations } from './tabletDestinations';
 import { TabletSidebarContext } from './TabletSidebarContext';
@@ -56,18 +36,15 @@ function AdaptiveTabNavigation({ children }: PropsWithChildren) {
   const { t: tr } = useTranslation();
   const goToDestination = useAppNavigation();
   const segments = useSegments();
-  const selected = tabletDestinationKey(segments);
   const { items, homeServerId, selectServer } = useSidebarServers();
   return (
     <NativeTabSidebar
       style={{ flex: 1 }}
       serversTitle={tr('navigation.servers')}
       servers={items}
-      selectedServerId={selected === 'home' ? (homeServerId ?? '') : ''}
+      selectedServerId={tabletDestinationKey(segments) === 'home' ? (homeServerId ?? '') : ''}
       onServerSelected={({ nativeEvent }) => {
-        if (selectServer(nativeEvent.id)) {
-          goToDestination('home');
-        }
+        if (selectServer(nativeEvent.id)) goToDestination('home');
       }}
     >
       {children}
@@ -82,113 +59,249 @@ function SplitNavigation({ children }: PropsWithChildren) {
   const segments = useSegments();
   const selected = tabletDestinationKey(segments);
   const { items: servers, homeServerId, selectServer } = useSidebarServers();
-  const [visibility, setVisibility] =
-    useState<ComponentProps<typeof NavigationSplitView>['columnVisibility']>('all');
-  const [compactColumn, setCompactColumn] =
-    useState<ComponentProps<typeof NavigationSplitView>['preferredCompactColumn']>('detail');
-  const showSidebar = useCallback(() => {
-    setVisibility('all');
-    setCompactColumn('sidebar');
-  }, [setVisibility, setCompactColumn]);
+  const safeArea = useSafeAreaInsets();
+  const { width } = useWindowDimensions();
+  // TabletNavigation mounts this fallback only on iPad.
+  const compact = usesCompactIPadSidebar(Platform.OS, true, Platform.Version, width);
+  const [sidebarVisible, setSidebarVisible] = useState(!compact);
+  useEffect(() => {
+    // iPadOS 16.4–17 approximates native adaptive split behavior when Stage
+    // Manager or Split View narrows the window. iPadOS 15 remains unchanged.
+    setSidebarVisible(!compact);
+  }, [compact]);
+  const showSidebar = useCallback(() => setSidebarVisible(true), []);
   const sidebar = useMemo(
-    () => ({ isCollapsed: visibility === 'detailOnly', showSidebar }),
-    [visibility, showSidebar],
+    () => ({ isCollapsed: !sidebarVisible, showSidebar }),
+    [sidebarVisible, showSidebar],
   );
+  const iconNames = {
+    house: 'home-outline',
+    externaldrive: 'server-outline',
+    heart: 'heart-outline',
+    magnifyingglass: 'search-outline',
+    gearshape: 'settings-outline',
+  } as const;
 
   return (
     <TabletSidebarContext value={sidebar}>
-      <Host style={{ flex: 1 }} colorScheme={theme.colorScheme} seedColor={theme.colors.tint}>
-        <NavigationSplitView
-          columnVisibility={visibility}
-          onColumnVisibilityChange={setVisibility}
-          preferredCompactColumn={compactColumn}
-          onPreferredCompactColumnChange={setCompactColumn}
-          modifiers={[navigationSplitViewStyle('balanced')]}
-        >
-          <NavigationSplitView.Sidebar>
-            <List
-              selection={[selected]}
-              onSelectionChange={([key]) => {
-                const destination = tabletDestinations.find((entry) => entry.key === key);
-                if (destination) {
-                  goToDestination(destination.key);
-                  setCompactColumn('detail');
-                }
-              }}
-              modifiers={[
-                listStyle('sidebar'),
-                navigationTitle('NekoFin'),
-                navigationBarTitleDisplayMode('large'),
-                navigationSplitViewColumnWidth({ min: 260, ideal: 280, max: 320 }),
-              ]}
-            >
-              <Section title={tr('media.media')}>
-                {tabletDestinations.map((entry) => (
-                  <NavigationLink key={entry.key} value={entry.key} modifiers={[tag(entry.key)]}>
-                    <Label title={entry.title} systemImage={entry.icon} />
-                  </NavigationLink>
-                ))}
-              </Section>
-              {servers.length ? (
-                <Section title={tr('navigation.servers')}>
-                  {servers.map((server) => (
-                    <Button
-                      key={server.id}
-                      onPress={() => {
-                        if (!selectServer(server.id)) return;
-                        goToDestination('home');
-                        setCompactColumn('detail');
-                      }}
-                      modifiers={[buttonStyle('plain')]}
+      <View style={[styles.root, { backgroundColor: theme.colors.backgroundGrouped }]}>
+        {sidebarVisible ? (
+          <View
+            style={[
+              styles.sidebar,
+              compact && styles.sidebarOverlay,
+              {
+                backgroundColor: theme.colors.backgroundGrouped,
+                borderRightColor: theme.colors.separator,
+              },
+            ]}
+          >
+            <View style={styles.sidebarHeader}>
+              <Text style={[styles.sidebarTitle, { color: theme.colors.text }]}>NekoFin</Text>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={tr('common.close')}
+                onPress={() => setSidebarVisible(false)}
+                hitSlop={8}
+              >
+                <Ionicons
+                  name="chevron-back-outline"
+                  size={20}
+                  color={theme.colors.textSecondary}
+                />
+              </Pressable>
+            </View>
+            <ScrollView contentContainerStyle={styles.sidebarContent}>
+              <Text style={[styles.sectionTitle, { color: theme.colors.textSecondary }]}>
+                {tr('media.media')}
+              </Text>
+              {tabletDestinations.map((entry) => {
+                const active = selected === entry.key;
+                return (
+                  <Pressable
+                    key={entry.key}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: active }}
+                    onPress={() => {
+                      goToDestination(entry.key);
+                      if (compact) setSidebarVisible(false);
+                    }}
+                    style={[
+                      styles.destination,
+                      active && { backgroundColor: theme.colors.surfaceMuted },
+                    ]}
+                  >
+                    <Ionicons
+                      name={iconNames[entry.icon as keyof typeof iconNames]}
+                      size={19}
+                      color={active ? theme.colors.tint : theme.colors.textSecondary}
+                    />
+                    <Text
+                      numberOfLines={1}
+                      style={[
+                        styles.destinationLabel,
+                        { color: active ? theme.colors.tint : theme.colors.text },
+                      ]}
                     >
-                      <HStack spacing={12}>
+                      {entry.title}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+              {servers.length ? (
+                <>
+                  <Text
+                    style={[
+                      styles.sectionTitle,
+                      styles.serverSectionTitle,
+                      { color: theme.colors.textSecondary },
+                    ]}
+                  >
+                    {tr('navigation.servers')}
+                  </Text>
+                  {servers.map((server) => {
+                    const active = homeServerId === server.id && selected === 'home';
+                    return (
+                      <Pressable
+                        key={server.id}
+                        accessibilityRole="button"
+                        accessibilityState={{ selected: active }}
+                        onPress={() => {
+                          if (selectServer(server.id)) goToDestination('home');
+                          if (compact) setSidebarVisible(false);
+                        }}
+                        style={[
+                          styles.destination,
+                          active && { backgroundColor: theme.colors.surfaceMuted },
+                        ]}
+                      >
                         {server.avatarUri ? (
                           <Image
-                            uiImage={server.avatarUri}
-                            modifiers={[
-                              resizable(),
-                              frame({ width: 28, height: 28 }),
-                              clipShape('circle'),
-                            ]}
+                            source={{ uri: server.avatarUri }}
+                            contentFit="cover"
+                            style={styles.serverAvatar}
                           />
                         ) : (
-                          <Image
-                            systemName="externaldrive"
+                          <Ionicons
+                            name="server-outline"
+                            size={19}
                             color={server.type === 'emby' ? '#34C759' : '#8B5CF6'}
-                            modifiers={[frame({ width: 28, height: 28 })]}
                           />
                         )}
-                        <Text modifiers={[foregroundStyle(theme.colors.text)]}>{server.name}</Text>
-                        <Spacer />
-                        {homeServerId === server.id ? (
-                          <Image systemName="checkmark" size={14} color={theme.colors.tint} />
+                        <Text
+                          numberOfLines={1}
+                          style={[styles.destinationLabel, { color: theme.colors.text }]}
+                        >
+                          {server.name}
+                        </Text>
+                        {active ? (
+                          <Ionicons name="checkmark" size={17} color={theme.colors.tint} />
                         ) : null}
-                      </HStack>
-                    </Button>
-                  ))}
-                </Section>
+                      </Pressable>
+                    );
+                  })}
+                </>
               ) : null}
-            </List>
-          </NavigationSplitView.Sidebar>
-          <NavigationSplitView.Detail>
-            <VStack
-              modifiers={[
-                embeddedNavigationBar(),
-                // UIKit owns the detail's safe areas, including its navigation bar.
-                // Insetting its host here makes UIKit add a second toolbar margin.
-                background(theme.colors.backgroundGrouped, { ignoresSafeAreaEdges: 'vertical' }),
-                ignoreSafeArea({ regions: 'container', edges: 'vertical' }),
-              ]}
+            </ScrollView>
+          </View>
+        ) : (
+          // Keep a permanently reachable sidebar toggle on iPadOS 15–17.
+          // unstable_headerLeftItems is an iOS 26-only native-stack API.
+          <View
+            style={[
+              styles.collapsedRail,
+              {
+                backgroundColor: theme.colors.backgroundGrouped,
+                borderRightColor: theme.colors.separator,
+                paddingTop: safeArea.top + 12,
+              },
+            ]}
+          >
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={tr('navigation.showSidebar')}
+              testID="tablet-sidebar-expand"
+              onPress={showSidebar}
+              style={styles.railButton}
             >
-              <RNHostView>
-                <SafeAreaProvider style={{ flex: 1 }}>
-                  <ContentDimensionsProvider>{children}</ContentDimensionsProvider>
-                </SafeAreaProvider>
-              </RNHostView>
-            </VStack>
-          </NavigationSplitView.Detail>
-        </NavigationSplitView>
-      </Host>
+              <Ionicons name="menu-outline" size={24} color={theme.colors.tint} />
+            </Pressable>
+          </View>
+        )}
+        {compact && sidebarVisible ? (
+          <Pressable
+            accessibilityLabel={tr('common.close')}
+            accessibilityRole="button"
+            onPress={() => setSidebarVisible(false)}
+            style={styles.overlayScrim}
+          />
+        ) : null}
+        <View style={styles.detail}>
+          <SafeAreaProvider style={{ flex: 1 }}>
+            <ContentDimensionsProvider>{children}</ContentDimensionsProvider>
+          </SafeAreaProvider>
+        </View>
+      </View>
     </TabletSidebarContext>
   );
 }
+
+const styles = StyleSheet.create({
+  root: { flex: 1, flexDirection: 'row' },
+  sidebar: { width: 280, maxWidth: '38%', borderRightWidth: StyleSheet.hairlineWidth },
+  sidebarOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    bottom: 0,
+    maxWidth: '75%',
+    zIndex: 3,
+    shadowColor: '#000',
+    shadowOpacity: 0.18,
+    shadowRadius: 16,
+    elevation: 8,
+  },
+  overlayScrim: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 2,
+    backgroundColor: 'rgba(0,0,0,0.14)',
+  },
+  collapsedRail: { width: 52, borderRightWidth: StyleSheet.hairlineWidth, alignItems: 'center' },
+  railButton: {
+    width: 44,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  sidebarHeader: {
+    minHeight: 60,
+    paddingHorizontal: 20,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  sidebarTitle: { fontSize: 24, fontWeight: '700' },
+  sidebarContent: { paddingHorizontal: 12, paddingBottom: 24 },
+  sectionTitle: {
+    fontSize: 12,
+    fontWeight: '600',
+    letterSpacing: 0.5,
+    paddingHorizontal: 10,
+    paddingTop: 18,
+    paddingBottom: 8,
+    textTransform: 'uppercase',
+  },
+  serverSectionTitle: { paddingTop: 26 },
+  destination: {
+    minHeight: 42,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginBottom: 3,
+  },
+  destinationLabel: { flex: 1, fontSize: 14, fontWeight: '500' },
+  serverAvatar: { width: 22, height: 22, borderRadius: 11 },
+  detail: { flex: 1, minWidth: 0 },
+});

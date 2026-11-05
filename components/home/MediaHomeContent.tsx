@@ -8,7 +8,7 @@ import { useContentDimensions, useLargeContentLayout } from '@/hooks/useContentD
 import type { HomeSectionWithStatus } from '@/hooks/useHomeSections';
 import { useAppTheme, useMediaHeroHeight } from '@/lib/theme';
 import type { MediaItem } from '@/services/media/types';
-import { useIsFocused } from 'expo-router/react-navigation';
+import { useIsFocused } from '@react-navigation/native';
 import { useCallback, useState } from 'react';
 import { Platform, View, type LayoutChangeEvent } from 'react-native';
 

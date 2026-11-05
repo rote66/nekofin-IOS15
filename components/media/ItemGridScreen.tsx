@@ -14,7 +14,9 @@ import { scheduleAfterNavigation } from '@/lib/navigationWork';
 import { useAppTheme } from '@/lib/theme';
 import { availableFiltersQueryOptions } from '@/services/media/queryOptions';
 import { MediaItem, MediaItemType, MediaSortBy } from '@/services/media/types';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { InfiniteData, UseInfiniteQueryResult } from '@tanstack/react-query';
+import { useNavigation } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,

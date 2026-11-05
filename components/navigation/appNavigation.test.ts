@@ -1,6 +1,5 @@
-import { StackRouter } from 'expo-router/build/react-navigation/routers/StackRouter';
-import { TabRouter } from 'expo-router/build/react-navigation/routers/TabRouter';
-import type { NavigationAction, NavigationState } from 'expo-router/react-navigation';
+import type { NavigationAction, NavigationState } from '@react-navigation/native';
+import { StackRouter, TabRouter } from '@react-navigation/routers';
 import { describe, expect, it, vi } from 'vitest';
 
 import { navigateToAppDestination } from './appNavigation';

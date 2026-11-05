@@ -1,6 +1,6 @@
 import { t as tr } from '@/lib/i18n';
 
-/** Shared ordering, labels and assets for native phone tabs and tablet navigation. */
+/** Shared ordering, labels and assets for native/legacy phone tabs and tablet navigation. */
 export const navigationDestinations = [
   {
     key: 'home',

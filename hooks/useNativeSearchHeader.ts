@@ -1,5 +1,5 @@
 import { TabletChromeContext } from '@/components/navigation/TabletChromeContext';
-import { useIsFocused } from 'expo-router/react-navigation';
+import { useIsFocused } from '@react-navigation/native';
 import { useCallback, useContext, useEffect, useId, useRef } from 'react';
 
 /** Android's expanded native search field owns the entire tablet toolbar. */

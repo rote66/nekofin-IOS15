@@ -18,7 +18,7 @@ const state = vi.hoisted(() => ({
 }));
 
 vi.mock('@/components/navigation/TabletChromeContext', () => ({ TabletChromeContext: {} }));
-vi.mock('expo-router/react-navigation', () => ({
+vi.mock('@react-navigation/native', () => ({
   useIsFocused: () => state.current.focused,
 }));
 vi.mock('react', () => ({
