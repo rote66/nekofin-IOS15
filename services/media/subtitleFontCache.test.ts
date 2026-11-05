@@ -105,6 +105,39 @@ vi.mock('expo-file-system', () => {
   }
   return { File, Directory, Paths: { cache: 'file:///cache', bundle: 'file:///bundle' } };
 });
+vi.mock('expo-file-system/legacy', async () => {
+  const { File } = await import('expo-file-system');
+  return {
+    createDownloadResumable: (
+      url: string,
+      fileUri: string,
+      options: Record<string, unknown> = {},
+      onProgress?: (progress: {
+        totalBytesWritten: number;
+        totalBytesExpectedToWrite: number;
+      }) => void,
+    ) => {
+      const file = new File(fileUri);
+      const controller = new AbortController();
+      return {
+        cancelAsync: async () => controller.abort(),
+        downloadAsync: async () => {
+          await io.download(url, file, {
+            ...options,
+            signal: controller.signal,
+            onProgress: (progress: { bytesWritten: number; totalBytes: number }) =>
+              onProgress?.({
+                totalBytesWritten: progress.bytesWritten,
+                totalBytesExpectedToWrite: progress.totalBytes,
+              }),
+          });
+          if (controller.signal.aborted || !file.exists) return undefined;
+          return { uri: fileUri, headers: {}, status: 200, mimeType: null };
+        },
+      };
+    },
+  };
+});
 vi.mock('./subtitleFonts', async (importOriginal) => ({
   ...(await importOriginal<typeof import('./subtitleFonts')>()),
   fetchFallbackFonts: (...args: unknown[]) => io.list(...args),

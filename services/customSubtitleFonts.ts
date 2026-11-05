@@ -2,6 +2,7 @@ import { t as tr } from '@/lib/i18n';
 import { storage } from '@/lib/storage';
 import { randomUUID } from 'expo-crypto';
 import { Directory, File, Paths } from 'expo-file-system';
+import * as FileSystemLegacy from 'expo-file-system/legacy';
 import { decodeWoff2, fontFamilies } from 'expo-mpv';
 
 import { SUBTITLE_FONT_MAX_BYTES } from './media/subtitleFonts';
@@ -126,23 +127,34 @@ async function downloadFont(
   signal: AbortSignal,
   headers?: Record<string, string>,
 ) {
-  const controller = new AbortController();
-  const abort = () => controller.abort();
-  signal.addEventListener('abort', abort, { once: true });
   let oversized = false;
+  let task: FileSystemLegacy.DownloadResumable | undefined;
+  const abort = () => {
+    void task?.cancelAsync();
+  };
   try {
     checkAborted(signal);
-    await File.downloadFileAsync(url, file, {
-      headers,
-      signal: controller.signal,
-      onProgress: ({ bytesWritten, totalBytes }) => {
-        if (bytesWritten > SUBTITLE_FONT_MAX_BYTES || totalBytes > SUBTITLE_FONT_MAX_BYTES) {
+    task = FileSystemLegacy.createDownloadResumable(
+      url,
+      file.uri,
+      { headers },
+      ({ totalBytesWritten, totalBytesExpectedToWrite }) => {
+        if (
+          totalBytesWritten > SUBTITLE_FONT_MAX_BYTES ||
+          totalBytesExpectedToWrite > SUBTITLE_FONT_MAX_BYTES
+        ) {
           oversized = true;
-          controller.abort();
+          abort();
         }
       },
-    });
+    );
+    signal.addEventListener('abort', abort, { once: true });
+    const result = await task.downloadAsync();
     if (oversized) throw new Error(tr('fonts.fileSizeLimit'));
+    if (!result) {
+      checkAborted(signal);
+      throw new Error(tr('fonts.downloadFailed'));
+    }
   } catch {
     if (oversized) throw new Error(tr('fonts.fileSizeLimit'));
     checkAborted(signal);

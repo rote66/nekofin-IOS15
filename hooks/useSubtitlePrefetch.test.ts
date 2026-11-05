@@ -24,7 +24,7 @@ vi.mock('expo-router', () => ({
   usePathname: () => state.pathname,
   useGlobalSearchParams: () => ({ itemId: state.playerItemId }),
 }));
-vi.mock('expo-router/react-navigation', () => ({ useIsFocused: () => state.focused }));
+vi.mock('@react-navigation/native', () => ({ useIsFocused: () => state.focused }));
 vi.mock('@/lib/contexts/MediaServerContext', () => ({
   useMediaServers: () => ({
     currentServer: { id: 'server', userId: 'user' },

@@ -2,8 +2,8 @@ import { useMediaServers } from '@/lib/contexts/MediaServerContext';
 import { deriveExternalSubtitles } from '@/services/media/externalTracks';
 import { createExternalSubtitleCache } from '@/services/media/subtitleCache';
 import type { MediaSource } from '@/services/media/types';
+import { useIsFocused } from '@react-navigation/native';
 import { useGlobalSearchParams, usePathname } from 'expo-router';
-import { useIsFocused } from 'expo-router/react-navigation';
 import { useEffect } from 'react';
 
 import { useSubtitleFonts } from './useSubtitleFonts';

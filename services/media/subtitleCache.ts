@@ -1,6 +1,7 @@
 import { t as tr } from '@/lib/i18n';
 import { CryptoDigestAlgorithm, digestStringAsync, randomUUID } from 'expo-crypto';
 import { Directory, File, Paths } from 'expo-file-system';
+import * as FileSystemLegacy from 'expo-file-system/legacy';
 
 export const SUBTITLE_CACHE_PATH = 'nekofin/subtitle-cache/v1';
 export const SUBTITLE_CACHE_MAX_BYTES = 128 * 1024 * 1024;
@@ -123,6 +124,10 @@ export function createSubtitleCacheStore({
     const file = fileFor({ key, extension });
     let timeout: ReturnType<typeof setTimeout> | undefined;
     let limitError: SubtitleCacheLimitError | undefined;
+    let task: FileSystemLegacy.DownloadResumable | undefined;
+    const abort = () => {
+      void task?.cancelAsync();
+    };
     const exceeded = (size: number) =>
       size > maxFileBytes
         ? new SubtitleCacheLimitError(
@@ -135,21 +140,26 @@ export function createSubtitleCacheStore({
       if (controller.signal.aborted) throw new Error('Subtitle download cancelled');
       // Large typeset ASS files can need more than thirty seconds on remote routes.
       timeout = setTimeout(() => controller.abort(), 120_000);
-      await File.downloadFileAsync(url, partial, {
-        signal: controller.signal,
-        onProgress: ({ bytesWritten, totalBytes }) => {
-          const size = Math.max(bytesWritten, totalBytes);
+      task = FileSystemLegacy.createDownloadResumable(
+        url,
+        partial.uri,
+        {},
+        ({ totalBytesWritten, totalBytesExpectedToWrite }) => {
+          const size = Math.max(totalBytesWritten, totalBytesExpectedToWrite, 0);
           if (size > limit.bytes) {
             limitError = exceeded(size);
-            controller.abort();
+            abort();
           }
         },
-      });
+      );
+      controller.signal.addEventListener('abort', abort, { once: true });
+      const result = await task.downloadAsync();
       if (limitError) throw limitError;
-      if (controller.signal.aborted) throw new Error('Subtitle download cancelled');
+      if (controller.signal.aborted || !result) throw new Error('Subtitle download cancelled');
       if (partial.size <= 0) throw new Error('Empty subtitle file');
       if (partial.size > limit.bytes) throw exceeded(partial.size);
-      await partial.move(file, { overwrite: true });
+      if (file.exists) file.delete();
+      await partial.move(file);
       if (controller.signal.aborted) {
         remove(file);
         throw new Error('Subtitle download cancelled');
@@ -169,6 +179,7 @@ export function createSubtitleCacheStore({
       remove(partial);
       throw limitError ?? error;
     } finally {
+      controller.signal.removeEventListener('abort', abort);
       clearTimeout(timeout);
       const next = waiting.shift();
       if (next) next();

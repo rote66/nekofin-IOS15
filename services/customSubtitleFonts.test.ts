@@ -122,6 +122,42 @@ vi.mock('expo-file-system', async () => {
     },
   };
 });
+vi.mock('expo-file-system/legacy', async () => {
+  const fs = await import('node:fs');
+  return {
+    createDownloadResumable: (
+      url: string,
+      fileUri: string,
+      _options: Record<string, unknown>,
+      onProgress?: (progress: {
+        totalBytesWritten: number;
+        totalBytesExpectedToWrite: number;
+      }) => void,
+    ) => {
+      let cancelled = false;
+      return {
+        cancelAsync: async () => {
+          cancelled = true;
+        },
+        downloadAsync: async () => {
+          const response: Response = await state.fetch(url);
+          if (!response.ok) throw new Error('HTTP error');
+          const expected = Number(response.headers.get('Content-Length')) || 0;
+          onProgress?.({ totalBytesWritten: 0, totalBytesExpectedToWrite: expected });
+          if (cancelled) return undefined;
+          const data = new Uint8Array(await response.arrayBuffer());
+          fs.writeFileSync(fileUri.replace(/^file:\/\//, ''), data);
+          onProgress?.({
+            totalBytesWritten: data.length,
+            totalBytesExpectedToWrite: data.length,
+          });
+          if (cancelled) return undefined;
+          return { uri: fileUri, headers: {}, status: 200, mimeType: null };
+        },
+      };
+    },
+  };
+});
 const bytes = new Uint8Array([0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0]);
 const settings = () => parseCustomSubtitleFonts(state.values.get(CUSTOM_SUBTITLE_FONTS_KEY));
 const NativeAbortController = globalThis.AbortController;

@@ -1,5 +1,6 @@
 import { CryptoDigestAlgorithm, digestStringAsync, randomUUID } from 'expo-crypto';
 import { Directory, File, Paths } from 'expo-file-system';
+import * as FileSystemLegacy from 'expo-file-system/legacy';
 import { decodeWoff2 } from 'expo-mpv';
 
 import {
@@ -152,11 +153,21 @@ export function createSubtitleFontCacheStore() {
         try {
           if (destination.exists) destination.delete();
           if (font.url.startsWith('file://')) await new File(font.url).copy(partial);
-          else
-            await File.downloadFileAsync(font.url, partial, {
+          else {
+            const task = FileSystemLegacy.createDownloadResumable(font.url, partial.uri, {
               headers: api.accessToken ? { 'X-Emby-Token': api.accessToken } : {},
-              signal,
             });
+            const abort = () => {
+              void task.cancelAsync();
+            };
+            signal.addEventListener('abort', abort, { once: true });
+            try {
+              const result = await task.downloadAsync();
+              if (!result || signal.aborted) continue;
+            } finally {
+              signal.removeEventListener('abort', abort);
+            }
+          }
           if (signal.aborted || !isFont(partial, font.size)) continue;
           await partial.move(destination);
           moved = true;
