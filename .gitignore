@@ -26,6 +26,12 @@ npm-debug.*
 yarn-debug.*
 yarn-error.*
 
+# Local diagnostics and private development-session history
+/.tmp/
+/log.log
+/screenlog.*
+/docs/history-session/
+
 # macOS
 .DS_Store
 *.pem
@@ -46,6 +52,7 @@ app-example
 *.ipa
 build*.apk
 build*.sh
+!build-ios15.sh
 
 modules/*/android/build
 modules/*/android/.gradle
