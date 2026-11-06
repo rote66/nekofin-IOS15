@@ -60,11 +60,13 @@ export default ({ config: _config }: { config: ExpoConfig }): ExpoConfig => {
     scheme: 'nekofin',
     userInterfaceStyle: 'automatic',
     ios: {
-      buildNumber: resolveIosBuildNumber(process.env.NEKOFIN_IOS_BUILD_NUMBER),
+      buildNumber: resolveIosBuildNumber(process.env.NEKOFIN_IOS_BUILD_NUMBER ?? '2'),
       icon: './assets/images/nekofin.icon',
       supportsTablet: true,
       bundleIdentifier: getUniqueIdentifier(),
       infoPlist: {
+        UIFileSharingEnabled: true,
+        LSSupportsOpeningDocumentsInPlace: true,
         LSApplicationQueriesSchemes: ['altstore', 'livecontainer'],
         UIViewControllerBasedStatusBarAppearance: true,
         NSAppTransportSecurity: {
