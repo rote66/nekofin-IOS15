@@ -1,4 +1,4 @@
-# Nekofin
+# Nekofin IOS15.1+ 专版
 
 [简体中文](README.md) · [English](README.en.md)
 
@@ -9,6 +9,8 @@
 </div>
 
 Nekofin 帮你连接自建媒体服务器，在手机上浏览电影与剧集、搜索片库、查看详情，并用 MPV 接着观看。它也支持多服务器账号、播放进度同步、音轨与字幕切换、弹幕和深浅色主题。
+
+此Fork分支为Backport到IOS15.1以上，适用版本为15.1-16.4，非此IOS版本建议用原版。
 
 ## 应用预览
 
@@ -46,15 +48,13 @@ Nekofin 帮你连接自建媒体服务器，在手机上浏览电影与剧集、
 - **查看详情**：浏览影片、剧集与单集信息，并管理收藏和观看状态
 - **继续观看**：通过 MPV 播放器同步进度，选择音轨、字幕、倍速和画面比例
 - **调整弹幕**：搜索弹幕，控制字体、透明度、速度、显示区域与密度
-- **Android 画中画**：播放时返回桌面继续观看视频和弹幕；可在「设置 → 播放与画质 → 画中画」关闭，默认开启
 - **切换外观**：使用浅色、暗色或跟随系统主题
-- **应用更新**：「帮助与关于 → 检查更新」同时检查安装包与资源更新，支持自动下载开关；Android 后台下载完成后再提示安装，播放期间延后提醒
 
 > 默认弹幕 API 提供的都是中文弹幕。
 
 ## 开始使用
 
-从 [GitHub Releases](https://github.com/lonzzi/nekofin/releases) 获取可用版本。添加 Jellyfin 或 Emby 账号后，进入媒体库即可浏览与搜索；打开影片或剧集详情可以继续播放。
+从 [GitHub Releases](https://github.com/rote66/nekofin-IOS15/releases) 获取可用版本。添加 Jellyfin 或 Emby 账号后，进入媒体库即可浏览与搜索；打开影片或剧集详情可以继续播放。
 
 ## 本地开发
 
@@ -80,24 +80,7 @@ React Native · Expo · Expo Router · MPV · TypeScript
 
 ## 下载
 
-- **Stable**：[最新正式版](https://github.com/lonzzi/nekofin/releases/latest)
-- **Pre-release**：[版本列表](https://github.com/lonzzi/nekofin/releases)中标记为 Pre-release 的版本
-- **CNB 下载**：[CNB Releases](https://cnb.cool/lonzzi/nekofin/-/releases)。同步完成的版本也会在 GitHub Release 说明中提供 CNB 页面和安装包直链。
-
-### iOS 侧载源
-
-在 iPhone / iPad 上点按图片，添加到 AltStore Classic（2.2+）或支持 Sources 的 LiveContainer。Beta 源包含预发布版和正式版，正式版源只包含正式版；尚无正式版时请选 Beta。
-
-| 更新源 · 渠道                                                                                  | AltStore Classic                                                                                                                                                                                                                                                                                                                        | LiveContainer                                                                                                                                                                                                                                            |
-| ---------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [CNB · Beta](https://cnb.cool/lonzzi/nekofin/-/releases/download/app-sources/beta.json)        | <a href="https://nekofin-updates-ronki.vercel.app/api/add-source?channel=beta&tool=altstore&source=cnb"><img src="https://raw.githubusercontent.com/altstoreio/FAQ/bcbf9fc229391828e7bd7c47ad3a0cacc5c9ac06/.gitbook/assets/DownloadBadge_dark%20(1).png" width="175" height="56" align="middle" alt="Download on AltStore" /></a>      | <a href="https://nekofin-updates-ronki.vercel.app/api/add-source?channel=beta&tool=livecontainer&source=cnb"><img src="assets/readme/download-on-livecontainer.svg" width="175" height="56" align="middle" alt="Add source to LiveContainer" /></a>      |
-| [CNB · Stable](https://cnb.cool/lonzzi/nekofin/-/releases/download/app-sources/stable.json)    | <a href="https://nekofin-updates-ronki.vercel.app/api/add-source?channel=stable&tool=altstore&source=cnb"><img src="https://raw.githubusercontent.com/altstoreio/FAQ/bcbf9fc229391828e7bd7c47ad3a0cacc5c9ac06/.gitbook/assets/DownloadBadge_dark%20(1).png" width="175" height="56" align="middle" alt="Download on AltStore" /></a>    | <a href="https://nekofin-updates-ronki.vercel.app/api/add-source?channel=stable&tool=livecontainer&source=cnb"><img src="assets/readme/download-on-livecontainer.svg" width="175" height="56" align="middle" alt="Add source to LiveContainer" /></a>    |
-| [GitHub · Beta](https://github.com/lonzzi/nekofin/releases/download/app-sources/beta.json)     | <a href="https://nekofin-updates-ronki.vercel.app/api/add-source?channel=beta&tool=altstore&source=github"><img src="https://raw.githubusercontent.com/altstoreio/FAQ/bcbf9fc229391828e7bd7c47ad3a0cacc5c9ac06/.gitbook/assets/DownloadBadge_dark%20(1).png" width="175" height="56" align="middle" alt="Download on AltStore" /></a>   | <a href="https://nekofin-updates-ronki.vercel.app/api/add-source?channel=beta&tool=livecontainer&source=github"><img src="assets/readme/download-on-livecontainer.svg" width="175" height="56" align="middle" alt="Add source to LiveContainer" /></a>   |
-| [GitHub · Stable](https://github.com/lonzzi/nekofin/releases/download/app-sources/stable.json) | <a href="https://nekofin-updates-ronki.vercel.app/api/add-source?channel=stable&tool=altstore&source=github"><img src="https://raw.githubusercontent.com/altstoreio/FAQ/bcbf9fc229391828e7bd7c47ad3a0cacc5c9ac06/.gitbook/assets/DownloadBadge_dark%20(1).png" width="175" height="56" align="middle" alt="Download on AltStore" /></a> | <a href="https://nekofin-updates-ronki.vercel.app/api/add-source?channel=stable&tool=livecontainer&source=github"><img src="assets/readme/download-on-livecontainer.svg" width="175" height="56" align="middle" alt="Add source to LiveContainer" /></a> |
-
-点按图片会直接唤起对应工具；系统可能询问是否打开应用。无法唤起时，复制上方对应的 JSON 源地址，在工具中手动添加。应用内「帮助与关于 → 更新源」可选择 GitHub / CNB，同时用于安装包和资源热更新的检查、下载及自动更新。iOS 安装包由侧载工具下载、签名和安装。
-
-版本 tag 自动生成中英双语更新说明，设置构建版本并发布 APK、未签名 IPA 和校验文件；发布成功后自动把版本号同步回 `main`。在线更新通过 GitHub Actions 单独发布，详见[发布流程](docs/releasing.md)。
+- **Stable**：[最新版](https://github.com/rote66/nekofin-IOS15/releases/latest)
 
 ## 致谢
 
