@@ -44,6 +44,10 @@ XCODE_ARGS=(
   CODE_SIGNING_REQUIRED=NO
   CODE_SIGN_IDENTITY=
   HERMES_CLI_PATH="$HERMES_WRAPPER"
+  # Keep local absolute source paths out of Swift #filePath and Clang __FILE__ strings.
+  "OTHER_SWIFT_FLAGS=\$(inherited) -file-prefix-map $ROOT_DIR=."
+  "OTHER_CFLAGS=\$(inherited) -ffile-prefix-map=$ROOT_DIR=."
+  "OTHER_CPLUSPLUSFLAGS=\$(inherited) -ffile-prefix-map=$ROOT_DIR=."
 )
 
 echo '[1/3] Cleaning iOS Release build...'

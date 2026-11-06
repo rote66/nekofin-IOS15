@@ -33,6 +33,36 @@ def call(*args):
     return result.stdout + result.stderr
 
 
+def sanitize_local_paths(app):
+    """Replace local build-machine prefixes in packaged diagnostic strings.
+
+    Several upstream Swift dependencies embed #filePath values in the app's
+    runtime string section. Keep every replacement byte-for-byte the same
+    length so Mach-O offsets and string storage remain unchanged; code is
+    re-signed after this pass.
+    """
+    root_prefix = str(ROOT).encode()
+    home_prefix = str(Path.home()).encode()
+    replacements = (
+        (root_prefix, b"source-root" + b"_" * (len(root_prefix) - len(b"source-root"))),
+        (home_prefix, b"local-home" + b"_" * (len(home_prefix) - len(b"local-home"))),
+    )
+    changed_files = 0
+    replaced_paths = 0
+    for path in app.rglob("*"):
+        if path.is_symlink() or not path.is_file():
+            continue
+        original = path.read_bytes()
+        sanitized = original
+        for prefix, replacement in replacements:
+            replaced_paths += sanitized.count(prefix)
+            sanitized = sanitized.replace(prefix, replacement)
+        if sanitized != original:
+            path.write_bytes(sanitized)
+            changed_files += 1
+    return changed_files, replaced_paths
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--archive", type=Path, default=DEFAULT_ARCHIVE)
@@ -61,6 +91,11 @@ def main():
         payload.mkdir()
         target = payload / "nekofin.app"
         shutil.copytree(source, target, symlinks=True)
+        changed_files, replaced_paths = sanitize_local_paths(target)
+        print(
+            f"Sanitized local source paths in {changed_files} packaged files "
+            f"({replaced_paths} occurrences)."
+        )
         (target / "embedded.mobileprovision").unlink(missing_ok=True)
 
         # Sign all independently loadable code before sealing the app bundle.
