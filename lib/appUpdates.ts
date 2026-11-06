@@ -20,6 +20,10 @@ export type AppRelease = {
 export const RELEASES_URL = 'https://github.com/lonzzi/nekofin/releases';
 export const AUTO_DOWNLOAD_UPDATES_KEY = 'appUpdate.autoDownload';
 
+// Temporary kill switch for package and OTA resource updates in this fork.
+// Keep the update implementation available so it can be re-enabled deliberately later.
+export const APP_UPDATES_ENABLED = false;
+
 export type InstallerDownload = {
   release: AppRelease;
   automatic: boolean;

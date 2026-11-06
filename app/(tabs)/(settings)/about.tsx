@@ -13,6 +13,7 @@ import {
   SettingsTitle,
 } from '@/components/ui/SettingsVisual';
 import { useTracedRouter } from '@/hooks/performance/useTracedRouter';
+import { APP_UPDATES_ENABLED } from '@/lib/appUpdates';
 import { useAppUpdate } from '@/lib/contexts/AppUpdateContext';
 import { useTranslation } from '@/lib/i18n';
 import { usePerformanceMonitorActions } from '@/lib/performance/PerformanceMonitorContext';
@@ -104,149 +105,153 @@ export default function AboutScreen() {
           />
         </NativeSettingsSection>
 
-        <NativeSettingsSection title={tr('updates.title')}>
-          <NativeSettingsItem
-            title={
-              <SettingsActionTitle tone={busy ? 'muted' : 'accent'}>
-                {tr('updates.checkForUpdates')}
-              </SettingsActionTitle>
-            }
-            subtitle={<SettingsSubtitle primary={tr('updates.checkAppAndResources')} />}
-            onPress={() => void update.checkManually()}
-            disabled={busy}
-            busy={status === 'checking'}
-            testID="check-app-update"
-          />
-          <NativeSettingsItem
-            title={
-              release ? (
-                <SettingsActionTitle tone={busy ? 'muted' : 'accent'}>
-                  {downloadStatus === 'ready'
-                    ? tr('updates.installNewVersion')
-                    : update.canInstallPackage
-                      ? tr('updates.downloadNewVersion')
-                      : Platform.OS === 'ios'
-                        ? tr('updates.chooseUpdateMethod')
-                        : tr('updates.downloadFromSource', {
-                            source: UPDATE_SOURCES[update.source].name,
-                          })}
-                </SettingsActionTitle>
-              ) : (
-                <SettingsTitle>{tr('updates.appUpdate')}</SettingsTitle>
-              )
-            }
-            subtitle={<SettingsSubtitle primary={packageSubtitle} lines={3} />}
-            onPress={
-              release
-                ? () =>
-                    void (downloadStatus === 'ready'
-                      ? update.installRelease()
-                      : update.downloadRelease())
-                : undefined
-            }
-            disabled={busy}
-            busy={downloadStatus === 'downloading' || downloadStatus === 'installing'}
-            testID="download-app-update"
-          />
-          {downloadStatus === 'downloading' ? (
-            <NativeSettingsItem
-              title={
-                <SettingsActionTitle tone="accent">
-                  {tr('updates.cancelDownload')}
-                </SettingsActionTitle>
-              }
-              onPress={() => void update.cancelDownload()}
-              testID="cancel-app-download"
-            />
-          ) : null}
-          <NativeSettingsItem
-            title={
-              resourceStatus === 'available' || resourceStatus === 'ready' ? (
-                <SettingsActionTitle tone={busy ? 'muted' : 'accent'}>
-                  {resourceStatus === 'ready'
-                    ? tr('updates.appResources')
-                    : tr('updates.downloadResourceUpdate')}
-                </SettingsActionTitle>
-              ) : (
-                <SettingsTitle>{tr('updates.resources')}</SettingsTitle>
-              )
-            }
-            subtitle={<SettingsSubtitle primary={resourceSubtitle} lines={3} />}
-            onPress={
-              resourceStatus === 'available' || resourceStatus === 'ready'
-                ? () => void update.downloadResources()
-                : undefined
-            }
-            disabled={busy}
-            busy={resourceStatus === 'downloading' || resourceStatus === 'applying'}
-            testID="download-resource-update"
-          />
-        </NativeSettingsSection>
+        {APP_UPDATES_ENABLED ? (
+          <>
+            <NativeSettingsSection title={tr('updates.title')}>
+              <NativeSettingsItem
+                title={
+                  <SettingsActionTitle tone={busy ? 'muted' : 'accent'}>
+                    {tr('updates.checkForUpdates')}
+                  </SettingsActionTitle>
+                }
+                subtitle={<SettingsSubtitle primary={tr('updates.checkAppAndResources')} />}
+                onPress={() => void update.checkManually()}
+                disabled={busy}
+                busy={status === 'checking'}
+                testID="check-app-update"
+              />
+              <NativeSettingsItem
+                title={
+                  release ? (
+                    <SettingsActionTitle tone={busy ? 'muted' : 'accent'}>
+                      {downloadStatus === 'ready'
+                        ? tr('updates.installNewVersion')
+                        : update.canInstallPackage
+                          ? tr('updates.downloadNewVersion')
+                          : Platform.OS === 'ios'
+                            ? tr('updates.chooseUpdateMethod')
+                            : tr('updates.downloadFromSource', {
+                                source: UPDATE_SOURCES[update.source].name,
+                              })}
+                    </SettingsActionTitle>
+                  ) : (
+                    <SettingsTitle>{tr('updates.appUpdate')}</SettingsTitle>
+                  )
+                }
+                subtitle={<SettingsSubtitle primary={packageSubtitle} lines={3} />}
+                onPress={
+                  release
+                    ? () =>
+                        void (downloadStatus === 'ready'
+                          ? update.installRelease()
+                          : update.downloadRelease())
+                    : undefined
+                }
+                disabled={busy}
+                busy={downloadStatus === 'downloading' || downloadStatus === 'installing'}
+                testID="download-app-update"
+              />
+              {downloadStatus === 'downloading' ? (
+                <NativeSettingsItem
+                  title={
+                    <SettingsActionTitle tone="accent">
+                      {tr('updates.cancelDownload')}
+                    </SettingsActionTitle>
+                  }
+                  onPress={() => void update.cancelDownload()}
+                  testID="cancel-app-download"
+                />
+              ) : null}
+              <NativeSettingsItem
+                title={
+                  resourceStatus === 'available' || resourceStatus === 'ready' ? (
+                    <SettingsActionTitle tone={busy ? 'muted' : 'accent'}>
+                      {resourceStatus === 'ready'
+                        ? tr('updates.appResources')
+                        : tr('updates.downloadResourceUpdate')}
+                    </SettingsActionTitle>
+                  ) : (
+                    <SettingsTitle>{tr('updates.resources')}</SettingsTitle>
+                  )
+                }
+                subtitle={<SettingsSubtitle primary={resourceSubtitle} lines={3} />}
+                onPress={
+                  resourceStatus === 'available' || resourceStatus === 'ready'
+                    ? () => void update.downloadResources()
+                    : undefined
+                }
+                disabled={busy}
+                busy={resourceStatus === 'downloading' || resourceStatus === 'applying'}
+                testID="download-resource-update"
+              />
+            </NativeSettingsSection>
 
-        <NativeSettingsSection
-          title={tr('updates.settings')}
-          footer={
-            Platform.OS === 'android'
-              ? tr('updates.automaticDownloadDescription')
-              : tr('updates.iosResourceUpdateDescription')
-          }
-        >
-          <NativeSettingsPicker
-            title={<SettingsTitle>{tr('updates.source')}</SettingsTitle>}
-            value={update.sourcePreference}
-            options={[
-              { title: tr('updates.automaticSource'), value: 'auto' },
-              { title: 'GitHub', value: 'github' },
-              { title: 'CNB', value: 'cnb' },
-            ]}
-            onValueChange={update.setUpdateSource}
-            disabled={busy}
-          />
-          <NativeSettingsSwitch
-            title={<SettingsTitle>{tr('updates.autoDownload')}</SettingsTitle>}
-            subtitle={
-              <SettingsSubtitle
-                primary={
-                  Platform.OS === 'android'
-                    ? tr('updates.askToInstallAfterDownload')
-                    : tr('updates.autoDownloadResources')
-                }
+            <NativeSettingsSection
+              title={tr('updates.settings')}
+              footer={
+                Platform.OS === 'android'
+                  ? tr('updates.automaticDownloadDescription')
+                  : tr('updates.iosResourceUpdateDescription')
+              }
+            >
+              <NativeSettingsPicker
+                title={<SettingsTitle>{tr('updates.source')}</SettingsTitle>}
+                value={update.sourcePreference}
+                options={[
+                  { title: tr('updates.automaticSource'), value: 'auto' },
+                  { title: 'GitHub', value: 'github' },
+                  { title: 'CNB', value: 'cnb' },
+                ]}
+                onValueChange={update.setUpdateSource}
+                disabled={busy}
               />
-            }
-            value={update.autoDownloadEnabled}
-            onValueChange={update.setAutoDownloadEnabled}
-          />
-          {Platform.OS === 'ios' ? (
-            <>
-              <NativeSettingsItem
-                title={
-                  <SettingsActionTitle tone="accent">
-                    {tr('about.addAltstoreSource')}
-                  </SettingsActionTitle>
+              <NativeSettingsSwitch
+                title={<SettingsTitle>{tr('updates.autoDownload')}</SettingsTitle>}
+                subtitle={
+                  <SettingsSubtitle
+                    primary={
+                      Platform.OS === 'android'
+                        ? tr('updates.askToInstallAfterDownload')
+                        : tr('updates.autoDownloadResources')
+                    }
+                  />
                 }
-                onPress={() => void update.addIosSource('altstore')}
-                testID="add-altstore-source"
+                value={update.autoDownloadEnabled}
+                onValueChange={update.setAutoDownloadEnabled}
               />
-              <NativeSettingsItem
-                title={
-                  <SettingsActionTitle tone="accent">
-                    {tr('about.addLivecontainerSource')}
-                  </SettingsActionTitle>
-                }
-                onPress={() => void update.addIosSource('livecontainer')}
-                testID="add-livecontainer-source"
-              />
-              <NativeSettingsItem
-                title={
-                  <SettingsActionTitle tone="accent">
-                    {tr('media.shareSourceUrl')}
-                  </SettingsActionTitle>
-                }
-                onPress={update.shareIosSource}
-              />
-            </>
-          ) : null}
-        </NativeSettingsSection>
+              {Platform.OS === 'ios' ? (
+                <>
+                  <NativeSettingsItem
+                    title={
+                      <SettingsActionTitle tone="accent">
+                        {tr('about.addAltstoreSource')}
+                      </SettingsActionTitle>
+                    }
+                    onPress={() => void update.addIosSource('altstore')}
+                    testID="add-altstore-source"
+                  />
+                  <NativeSettingsItem
+                    title={
+                      <SettingsActionTitle tone="accent">
+                        {tr('about.addLivecontainerSource')}
+                      </SettingsActionTitle>
+                    }
+                    onPress={() => void update.addIosSource('livecontainer')}
+                    testID="add-livecontainer-source"
+                  />
+                  <NativeSettingsItem
+                    title={
+                      <SettingsActionTitle tone="accent">
+                        {tr('media.shareSourceUrl')}
+                      </SettingsActionTitle>
+                    }
+                    onPress={update.shareIosSource}
+                  />
+                </>
+              ) : null}
+            </NativeSettingsSection>
+          </>
+        ) : null}
 
         {isUnlocked || playerLab.available ? (
           <NativeSettingsSection title={tr('diagnostics.developerDiagnostics')}>

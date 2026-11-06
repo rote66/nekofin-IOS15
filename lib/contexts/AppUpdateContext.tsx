@@ -1,5 +1,6 @@
 import { createAppUpdateController, type UpdateSnapshot } from '@/lib/appUpdateController';
 import {
+  APP_UPDATES_ENABLED,
   AUTO_DOWNLOAD_UPDATES_KEY,
   isUpdatePromptRoute,
   resolveInstalledRelease,
@@ -145,11 +146,14 @@ export function AppUpdateProvider({ children }: { children: ReactNode }) {
     createAppUpdateController({
       currentVersion,
       automaticEnabled:
-        !__DEV__ && isProductionBuild(Updates.channel, Constants.expoConfig?.extra?.appVariant),
+        APP_UPDATES_ENABLED &&
+        !__DEV__ &&
+        isProductionBuild(Updates.channel, Constants.expoConfig?.extra?.appVariant),
       storage,
       source: resolveUpdateSource(storage.getString(SELECTED_UPDATE_SOURCE_KEY)),
       sourcePreference: resolveUpdateSourcePreference(storage.getString(UPDATE_SOURCE_KEY)),
-      autoDownloadEnabled: storage.getBoolean(AUTO_DOWNLOAD_UPDATES_KEY) ?? true,
+      autoDownloadEnabled:
+        APP_UPDATES_ENABLED && (storage.getBoolean(AUTO_DOWNLOAD_UPDATES_KEY) ?? true),
       canAutoDownloadResources: async () => {
         if (canInstallAppUpdate) return isInstallerNetworkUnmetered();
         const network = await Network.getNetworkStateAsync();
@@ -167,7 +171,7 @@ export function AppUpdateProvider({ children }: { children: ReactNode }) {
       },
       openURL: openUpdateURL,
       resources:
-        !__DEV__ && Updates.isEnabled
+        APP_UPDATES_ENABLED && !__DEV__ && Updates.isEnabled
           ? {
               check: async (source) => {
                 if (pendingResource.current) return true;
@@ -188,15 +192,16 @@ export function AppUpdateProvider({ children }: { children: ReactNode }) {
               apply: Updates.reloadAsync,
             }
           : undefined,
-      installer: canInstallAppUpdate
-        ? {
-            supportsSource: supportsInstallerSource,
-            start: startAppInstallerDownload,
-            refresh: getAppInstallerDownload,
-            cancel: cancelAppInstallerDownload,
-            install: installAppUpdate,
-          }
-        : undefined,
+      installer:
+        APP_UPDATES_ENABLED && canInstallAppUpdate
+          ? {
+              supportsSource: supportsInstallerSource,
+              start: startAppInstallerDownload,
+              refresh: getAppInstallerDownload,
+              cancel: cancelAppInstallerDownload,
+              install: installAppUpdate,
+            }
+          : undefined,
       showUpdate: (release, actions) => {
         const installation =
           Platform.OS === 'ios'
@@ -260,6 +265,7 @@ export function AppUpdateProvider({ children }: { children: ReactNode }) {
   const snapshot = useSyncExternalStore(controller.subscribe, controller.getSnapshot);
 
   useEffect(() => {
+    if (!APP_UPDATES_ENABLED) return;
     let timer: ReturnType<typeof setTimeout> | undefined;
     let polling: ReturnType<typeof setInterval> | undefined;
     let disposed = false;
@@ -292,6 +298,7 @@ export function AppUpdateProvider({ children }: { children: ReactNode }) {
   }, [controller, pathname]);
 
   function setAutoDownloadEnabled(value: boolean) {
+    if (!APP_UPDATES_ENABLED) return;
     storage.set(AUTO_DOWNLOAD_UPDATES_KEY, value);
     controller.setAutoDownloadEnabled(value);
     if (value) void requestDownloadNotifications();
@@ -302,28 +309,42 @@ export function AppUpdateProvider({ children }: { children: ReactNode }) {
       value={{
         ...snapshot,
         currentVersion,
-        checkManually: controller.checkManually,
+        checkManually: () => (APP_UPDATES_ENABLED ? controller.checkManually() : Promise.resolve()),
         downloadRelease: async () => {
+          if (!APP_UPDATES_ENABLED) return;
           await requestDownloadNotifications();
           await controller.downloadRelease();
         },
-        installRelease: controller.installRelease,
-        downloadResources: controller.downloadResources,
-        cancelDownload: controller.cancelDownload,
+        installRelease: () =>
+          APP_UPDATES_ENABLED ? controller.installRelease() : Promise.resolve(),
+        downloadResources: () =>
+          APP_UPDATES_ENABLED ? controller.downloadResources() : Promise.resolve(),
+        cancelDownload: () =>
+          APP_UPDATES_ENABLED ? controller.cancelDownload() : Promise.resolve(),
         setAutoDownloadEnabled,
         setUpdateSource: (value) => {
-          if (isUpdateSourcePreference(value) && controller.setSource(value)) {
+          if (
+            APP_UPDATES_ENABLED &&
+            isUpdateSourcePreference(value) &&
+            controller.setSource(value)
+          ) {
             storage.set(UPDATE_SOURCE_KEY, value);
             void controller.checkAutomatically();
           }
         },
-        addIosSource,
+        addIosSource: async (tool) => {
+          if (!APP_UPDATES_ENABLED) return;
+          await addIosSource(tool);
+        },
         shareIosSource: () => {
+          if (!APP_UPDATES_ENABLED) return;
           void Share.share({ message: getIosUpdateSource(currentVersion, snapshot.source) });
         },
-        canInstallPackage: supportsInstallerSource(
-          snapshot.release ? (snapshot.release.source ?? 'github') : snapshot.source,
-        ),
+        canInstallPackage:
+          APP_UPDATES_ENABLED &&
+          supportsInstallerSource(
+            snapshot.release ? (snapshot.release.source ?? 'github') : snapshot.source,
+          ),
         resourceVersion: !Updates.isEnabled
           ? null
           : Updates.isEmbeddedLaunch
