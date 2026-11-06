@@ -1,6 +1,6 @@
 import { EpisodeCard, SeriesCard } from '@/components/media/Card';
 import { useFloatingTabBarInset } from '@/components/navigation/FloatingTabBarInset';
-import { NativeListTitle } from '@/components/navigation/NativeListTitle';
+import { NativeScreenTitle } from '@/components/navigation/NativeScreenTitle';
 import { useContentDimensions } from '@/hooks/useContentDimensions';
 import { useGridLayout } from '@/hooks/useGridLayout';
 import { useMediaAdapter } from '@/hooks/useMediaAdapter';
@@ -14,9 +14,7 @@ import { scheduleAfterNavigation } from '@/lib/navigationWork';
 import { useAppTheme } from '@/lib/theme';
 import { availableFiltersQueryOptions } from '@/services/media/queryOptions';
 import { MediaItem, MediaItemType, MediaSortBy } from '@/services/media/types';
-import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { InfiniteData, UseInfiniteQueryResult } from '@tanstack/react-query';
-import { useNavigation } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
@@ -435,7 +433,7 @@ export function ItemGridScreen({
   if ((query || dataState) && isLoading) {
     return (
       <>
-        <NativeListTitle>{title}</NativeListTitle>
+        <NativeScreenTitle>{title}</NativeScreenTitle>
         <PageScrollView style={[styles.container, { backgroundColor }]}>
           <SkeletonItemGrid type={type} numColumns={numColumns} itemWidth={itemWidth} gap={gap} />
         </PageScrollView>
@@ -446,7 +444,7 @@ export function ItemGridScreen({
   if ((query || dataState) && isError) {
     return (
       <>
-        <NativeListTitle>{title}</NativeListTitle>
+        <NativeScreenTitle>{title}</NativeScreenTitle>
         <View style={[styles.container, { backgroundColor, paddingTop: insets.top }]}>
           <View style={styles.errorContainer}>
             <Text
@@ -482,7 +480,7 @@ export function ItemGridScreen({
   if (layout === 'grid' && items.length > 0) {
     return (
       <>
-        <NativeListTitle>{title}</NativeListTitle>
+        <NativeScreenTitle>{title}</NativeScreenTitle>
         <SectionList
           {...gridBatching}
           sections={gridSections}
@@ -540,7 +538,7 @@ export function ItemGridScreen({
   if (groupedItems.length === 1) {
     return (
       <>
-        <NativeListTitle>{title}</NativeListTitle>
+        <NativeScreenTitle>{title}</NativeScreenTitle>
         <FlatList
           {...gridBatching}
           data={groupedItems[0].items}
@@ -580,7 +578,7 @@ export function ItemGridScreen({
 
   return (
     <>
-      <NativeListTitle>{title}</NativeListTitle>
+      <NativeScreenTitle>{title}</NativeScreenTitle>
       <ScrollView
         style={{ backgroundColor }}
         contentContainerStyle={[

@@ -5,14 +5,11 @@ import { isLiquidGlassAvailable } from 'expo-glass-effect';
 import { createElement, useContext } from 'react';
 import { Platform, type ColorValue } from 'react-native';
 
+import { nativeScreenTitleOptions } from './NativeScreenTitle';
 import { nativeStatusBarOptions } from './nativeStackConfig';
 import { platformHeaderOptions } from './platformHeaderOptions';
 import { TabletChromeContext, TabletHeaderTitle } from './TabletChromeContext';
 import { useTabletSidebar } from './TabletSidebarContext';
-
-export const nativeListTitleOptions = {
-  headerLargeTitle: Platform.OS === 'ios' && !Platform.isPad,
-} as const;
 
 /** Let UIKit render its own navigation and scroll-edge materials on iOS 26+. */
 export function useNativeListStackOptions(backgroundColor: string) {
@@ -30,7 +27,7 @@ export function useNativeListStackOptions(backgroundColor: string) {
     // page backgrounds on iOS 15. Give legacy nav bars the same opaque color
     // as their content, instead of showing a contrasting blur band.
     headerTransparent: ios && !legacyIOS,
-    ...nativeListTitleOptions,
+    ...nativeScreenTitleOptions,
     headerShadowVisible: false,
     headerLargeTitleShadowVisible: false,
     headerBackButtonDisplayMode: 'minimal',

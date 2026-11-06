@@ -3,7 +3,7 @@ import { AndroidMaterialSurface } from '@/modules/native-layout/AndroidMaterialS
 import { Host, ModalBottomSheet, type ModalBottomSheetRef } from '@expo/ui/jetpack-compose';
 import { testID as nativeTestID } from '@expo/ui/jetpack-compose/modifiers';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { StyleSheet, View, type ColorValue } from 'react-native';
+import { StyleSheet, useWindowDimensions, View, type ColorValue } from 'react-native';
 
 /** Compose owns the window, dragging, scrolling and dismissal animation. */
 export function NativeBottomSheet({
@@ -24,6 +24,7 @@ export function NativeBottomSheet({
   testID?: string;
 }) {
   const theme = useAppTheme();
+  const { width, height } = useWindowDimensions();
   const sheet = useRef<ModalBottomSheetRef>(null);
   const [mounted, setMounted] = useState(isPresented);
   useEffect(() => {
@@ -41,9 +42,10 @@ export function NativeBottomSheet({
   }, [isPresented]);
 
   if (!mounted) return null;
+  // Compose needs a measurable host to mount the dialog.
   return (
     <View pointerEvents="none" style={StyleSheet.absoluteFill}>
-      <Host style={StyleSheet.absoluteFill} colorScheme={theme.colorScheme}>
+      <Host style={{ position: 'absolute', width, height }} colorScheme={theme.colorScheme}>
         <ModalBottomSheet
           ref={sheet}
           onDismissRequest={onDismiss}
